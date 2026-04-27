@@ -68,21 +68,23 @@ export function useChatSession({
   const conversationRef = useRef<Conversation | null>(conversation);
   conversationRef.current = conversation;
 
-  // Load history whenever conversation changes.
+  // Load history when the conversation identity changes. We deliberately depend on the id
+  // (not the full object) so metadata updates — model picker, provider switch, updatedAt
+  // bumps — do NOT reset the in-memory transcript or wipe the streaming state mid-stream.
+  const conversationId = conversation?.id ?? null;
   useEffect(() => {
     let alive = true;
-    if (!conversation) {
+    if (!conversationId) {
       dispatch({ type: 'reset' });
       return;
     }
-    const id = conversation.id;
-    void listMessages(id).then((m) => {
+    void listMessages(conversationId).then((m) => {
       if (alive) dispatch({ type: 'load', messages: m });
     });
     return () => {
       alive = false;
     };
-  }, [conversation]);
+  }, [conversationId]);
 
   // Open / close the streaming port.
   useEffect(() => {

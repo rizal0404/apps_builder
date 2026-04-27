@@ -36,8 +36,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PortName.CHAT) return;
   let aborter: AbortController | null = null;
+  let connected = true;
+
+  /** Best-effort postMessage that swallows errors once the port is gone. */
+  const safePost = (m: unknown) => {
+    if (!connected) return;
+    try {
+      port.postMessage(m);
+    } catch {
+      connected = false;
+    }
+  };
 
   port.onDisconnect.addListener(() => {
+    connected = false;
     aborter?.abort();
     aborter = null;
   });
@@ -52,7 +64,7 @@ chrome.runtime.onConnect.addListener((port) => {
     try {
       const apiKey = await getApiKey(req.providerId as ProviderId);
       if (!apiKey) {
-        port.postMessage({
+        safePost({
           type: MsgType.AI_CHAT_ERROR,
           error: `Missing API key for provider "${req.providerId}". Open Settings to add it.`,
         });
@@ -67,12 +79,12 @@ chrome.runtime.onConnect.addListener((port) => {
           messages: req.messages,
           signal: aborter.signal,
         },
-        ({ delta }) => port.postMessage({ type: MsgType.AI_CHAT_CHUNK, delta }),
+        ({ delta }) => safePost({ type: MsgType.AI_CHAT_CHUNK, delta }),
       );
-      port.postMessage({ type: MsgType.AI_CHAT_DONE, finishReason: result.finishReason });
+      safePost({ type: MsgType.AI_CHAT_DONE, finishReason: result.finishReason });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      port.postMessage({ type: MsgType.AI_CHAT_ERROR, error });
+      safePost({ type: MsgType.AI_CHAT_ERROR, error });
     } finally {
       aborter = null;
     }
