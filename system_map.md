@@ -3,10 +3,11 @@
 > **Live document.** Update this file in every PR that adds, removes, or moves a runtime module
 > or build configuration. Reviewers should reject PRs whose code changes are not reflected here.
 
-Last updated: **Phase 2 / Apps Script REST + Review mode** — adds OAuth via
-`chrome.identity`, the `projects.getContent` / `updateContent` client, an AI-output
-parser, a diff/Apply Review panel, and a Monaco MAIN-world RPC bridge for the
-live-typing fallback.
+Last updated: **Phase 3 / Gemini provider + prompt enhancer + template gallery** —
+adds the Google Generative Language API streaming adapter, an in-line “Enhance”
+button in the composer that rewrites short ideas into Apps Script-flavoured prompts,
+and a curated starter-template gallery (web app, sheet auditor, mail merge,
+form-to-Slack, custom function) accessible from the empty-state of the side panel.
 
 ---
 
@@ -71,38 +72,41 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 
 ### Source — shared
 
-| Path                          | Purpose                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `src/shared/constants.ts`     | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS`     |
-| `src/shared/types.ts`         | `ChatMessage`, `Conversation`, `Settings`, `ChatRequest`, `DEFAULT_SYSTEM_PROMPT`                             |
-| `src/shared/id.ts`            | `generateId(prefix?)` — 128-bit random hex id                                                                 |
-| `src/shared/scriptId.ts`      | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                    |
-| `src/shared/crypto.ts`        | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                        |
-| `src/shared/storage.ts`       | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                                  |
-| `src/shared/db.ts`            | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                            |
-| `src/shared/oauth.ts`         | `chrome.identity.getAuthToken` wrapper + cache busting on 401                                                 |
-| `src/shared/appsScriptApi.ts` | `getProjectContent` / `updateProjectContent` REST client; surfaces `apps_script_api_disabled`                 |
-| `src/shared/codeBlocks.ts`    | Parses fenced AI code blocks (`js Code.gs`, `html Index.html`, `json appsscript.json`) into `ExtractedFile[]` |
-| `src/shared/diff.ts`          | LCS-based line diff used by the Review panel                                                                  |
-| `src/shared/patch.ts`         | `buildPatch(scriptId, proposed)` + `applyPatch(patch)`                                                        |
-| `src/shared/license.ts`       | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                        |
+| Path                           | Purpose                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `src/shared/constants.ts`      | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS`     |
+| `src/shared/types.ts`          | `ChatMessage`, `Conversation`, `Settings`, `ChatRequest`, `DEFAULT_SYSTEM_PROMPT`                             |
+| `src/shared/id.ts`             | `generateId(prefix?)` — 128-bit random hex id                                                                 |
+| `src/shared/scriptId.ts`       | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                    |
+| `src/shared/crypto.ts`         | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                        |
+| `src/shared/storage.ts`        | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                                  |
+| `src/shared/db.ts`             | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                            |
+| `src/shared/oauth.ts`          | `chrome.identity.getAuthToken` wrapper + cache busting on 401                                                 |
+| `src/shared/appsScriptApi.ts`  | `getProjectContent` / `updateProjectContent` REST client; surfaces `apps_script_api_disabled`                 |
+| `src/shared/codeBlocks.ts`     | Parses fenced AI code blocks (`js Code.gs`, `html Index.html`, `json appsscript.json`) into `ExtractedFile[]` |
+| `src/shared/diff.ts`           | LCS-based line diff used by the Review panel                                                                  |
+| `src/shared/patch.ts`          | `buildPatch(scriptId, proposed)` + `applyPatch(patch)`                                                        |
+| `src/shared/promptEnhancer.ts` | `enhancePrompt({ providerId, model, text })` — single-shot rewrite via the configured chat provider           |
+| `src/shared/templates.ts`      | Curated `Template[]` registry with starter prompts and optional `bootstrap` files                             |
+| `src/shared/license.ts`        | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                        |
 
 ### Source — providers
 
-| Path                          | Purpose                                                           |
-| ----------------------------- | ----------------------------------------------------------------- |
-| `src/providers/types.ts`      | `IProvider` interface + request/result shapes                     |
-| `src/providers/sse.ts`        | Minimal Server-Sent Events parser (async generator)               |
-| `src/providers/openrouter.ts` | OpenRouter chat completions adapter with streaming                |
-| `src/providers/registry.ts`   | `getProvider(id)` lookup; throws when a provider is not yet wired |
+| Path                          | Purpose                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `src/providers/types.ts`      | `IProvider` interface + request/result shapes                                       |
+| `src/providers/sse.ts`        | Minimal Server-Sent Events parser (async generator)                                 |
+| `src/providers/openrouter.ts` | OpenRouter chat completions adapter with streaming                                  |
+| `src/providers/gemini.ts`     | Google Generative Language API (`streamGenerateContent`) adapter with SSE streaming |
+| `src/providers/registry.ts`   | `getProvider(id)` lookup; throws when a provider is not yet wired                   |
 
 ### Source — background / content
 
-| Path                               | Purpose                                                                                                                                                                         |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/background/service-worker.ts` | Routes `PING`, `GET_PROJECT_CONTENT`, `BUILD_PATCH`, `APPLY_PATCH`, `UPDATE_PROJECT_CONTENT`; owns `PortName.CHAT` streaming session with `safePost` against disconnected ports |
-| `src/content/inject.ts`            | ISOLATED-world content script; PING + RPC bridge to the MAIN-world Monaco helper                                                                                                |
-| `src/content/monaco-bridge.ts`     | MAIN-world Monaco helper (`ping`, `getActiveModelText`, `replaceActiveModelText`) used as a live-typing fallback                                                                |
+| Path                               | Purpose                                                                                                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/background/service-worker.ts` | Routes `PING`, `GET_PROJECT_CONTENT`, `BUILD_PATCH`, `APPLY_PATCH`, `UPDATE_PROJECT_CONTENT`, `ENHANCE_PROMPT`; owns `PortName.CHAT` streaming session with `safePost` against disconnected ports |
+| `src/content/inject.ts`            | ISOLATED-world content script; PING + RPC bridge to the MAIN-world Monaco helper                                                                                                                  |
+| `src/content/monaco-bridge.ts`     | MAIN-world Monaco helper (`ping`, `getActiveModelText`, `replaceActiveModelText`) used as a live-typing fallback                                                                                  |
 
 ### Source — side panel
 
@@ -120,6 +124,7 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 | `src/sidepanel/components/ConversationsDrawer.tsx` | Sidebar list of conversations for the current scriptId                             |
 | `src/sidepanel/components/DiffView.tsx`            | Renders a `DiffResult` as a side-by-side gutter table                              |
 | `src/sidepanel/components/ReviewPanel.tsx`         | Modal-style overlay: file list → diff → Apply (or Apps Script API hint)            |
+| `src/sidepanel/components/TemplateGallery.tsx`     | Empty-state cards for the curated starter templates                                |
 
 ### Source — options
 
@@ -181,6 +186,7 @@ Host permissions:
 | `BUILD_PATCH`                                    | sidepanel → background (build a `ProjectPatch` from `ExtractedFile[]`)     | **2 ✓**           |
 | `APPLY_PATCH`                                    | sidepanel → background (REST) **or** sidepanel → content (Monaco fallback) | **2 ✓**           |
 | `GET_PROJECT_CONTENT` / `UPDATE_PROJECT_CONTENT` | sidepanel → background                                                     | **2 ✓**           |
+| `ENHANCE_PROMPT`                                 | sidepanel → background (one-shot non-streaming rewrite)                    | **3 ✓**           |
 
 `PortName.CHAT` is the long-lived port name used by `useChatSession` to ship `ChatRequest`
 messages and `{ type: 'cancel' }` instructions to the background worker.
@@ -208,7 +214,12 @@ module, add a note in the changelog at the bottom.
 
 ### Changelog
 
-- **Phase 2 (this PR):** OAuth via `chrome.identity.getAuthToken`, Apps Script REST client
+- **Phase 3 (this PR):** Gemini provider (`generativelanguage.googleapis.com`
+  `streamGenerateContent` SSE), `promptEnhancer` module + `ENHANCE_PROMPT` background
+  route, ✨ Enhance button in `Composer`, curated `Template[]` registry with optional
+  `bootstrap` files, `TemplateGallery` empty-state component, Options page provider help
+  links (OpenRouter / AI Studio).
+- **Phase 2:** OAuth via `chrome.identity.getAuthToken`, Apps Script REST client
   (`getProjectContent` / `updateProjectContent`), fenced-block parser → `ExtractedFile[]`,
   LCS line-diff, `buildPatch` / `applyPatch`, Review-mode UI (`ReviewPanel` + `DiffView`),
   background routes for `GET_PROJECT_CONTENT` / `BUILD_PATCH` / `APPLY_PATCH` /

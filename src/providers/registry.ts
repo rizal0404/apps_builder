@@ -1,9 +1,11 @@
 import { ProviderId } from '@/shared/constants';
 import { openRouterProvider } from './openrouter';
+import { geminiProvider } from './gemini';
 import type { IProvider } from './types';
 
 const REGISTRY: Partial<Record<ProviderId, IProvider>> = {
   [ProviderId.OPENROUTER]: openRouterProvider,
+  [ProviderId.GEMINI]: geminiProvider,
 };
 
 export function getProvider(id: ProviderId): IProvider {

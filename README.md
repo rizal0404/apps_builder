@@ -15,14 +15,14 @@ This repository hosts the extension only. Landing page, license server, and memb
 
 This is a **closed-source commercial project** (LTD model — see [PLAN.md](./PLAN.md) §10).
 
-Current phase: **Phase 2 — Apps Script REST API + Review mode**.
+Current phase: **Phase 3 — Gemini provider + prompt enhancer + template gallery**.
 
 | Phase | Scope                                                                                                                                      | Status      |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
 | 0     | Repo, build pipeline, manifest MV3, side-panel skeleton, CI                                                                                | shipped     |
 | 1     | Chat MVP with OpenRouter; encrypted API key storage; chat history per scriptId                                                             | shipped     |
-| 2     | Apps Script REST API integration (`projects.getContent` / `updateContent`); Review mode + diff/Apply UI; Monaco MAIN-world bridge fallback | in progress |
-| 3     | Gemini provider; prompt enhancer; design skills; template gallery                                                                          | planned     |
+| 2     | Apps Script REST API integration (`projects.getContent` / `updateContent`); Review mode + diff/Apply UI; Monaco MAIN-world bridge fallback | shipped     |
+| 3     | Gemini provider; prompt enhancer; starter template gallery                                                                                 | in progress |
 | 4     | Autonomous mode (tool-calling planner) + publish web app                                                                                   | planned     |
 | 5     | Polish: live preview, license validator, telemetry, web-store submission                                                                   | planned     |
 
@@ -91,6 +91,29 @@ in a dev / unpacked build:
    Approve it; subsequent calls reuse the cached token.
 7. The user must also enable the Apps Script API for their account at
    https://script.google.com/home/usersettings (one-time per Google account).
+
+## Prompt enhancer (Phase 3)
+
+The composer has an **✨ Enhance** button next to Send. Type a short idea (e.g. "mail
+merge from a sheet"), click Enhance, and GASPOLL rewrites it into a precise, Apps
+Script-flavoured prompt before you send. The rewrite uses your currently selected
+provider + model, with a dedicated enhancer system prompt (see
+[`src/shared/promptEnhancer.ts`](./src/shared/promptEnhancer.ts)).
+
+## Templates (Phase 3)
+
+The empty state of a fresh chat shows a **Starter templates** gallery. Each card seeds
+the composer with a detailed prompt (and, where it makes sense, a set of bootstrap
+files you can apply directly via Review mode). Current templates:
+
+- **Web App: Hello world** — minimal HtmlService web app (with bootstrap files).
+- **Sheet: onEdit audit log**.
+- **Mail merge from a sheet**.
+- **Form responses → Slack**.
+- **Custom function: `=GASPOLL_ASK`** that calls OpenRouter via `UrlFetchApp`.
+
+The full registry lives in [`src/shared/templates.ts`](./src/shared/templates.ts) — add
+new ones there.
 
 ## Review mode (Phase 2)
 

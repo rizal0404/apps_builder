@@ -65,3 +65,17 @@ export async function getProjectContentViaBackground(scriptId: string): Promise<
   });
   return resp.content;
 }
+
+export async function enhancePromptViaBackground(
+  providerId: string,
+  model: string,
+  text: string,
+): Promise<string> {
+  const resp = await send<{ text: string }>({
+    type: MsgType.ENHANCE_PROMPT,
+    providerId,
+    model,
+    text,
+  });
+  return resp.text;
+}

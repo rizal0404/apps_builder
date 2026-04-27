@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ChatMessage } from '@/shared/types';
 import { extractFiles, type ExtractedFile } from '@/shared/codeBlocks';
+import type { Template } from '@/shared/templates';
+import { TemplateGallery } from './TemplateGallery';
 
 interface Props {
   messages: ChatMessage[];
   streamingId: string | null;
   onReview: (files: ExtractedFile[], messageId: string) => void;
+  onUseTemplate: (t: Template) => void;
 }
 
-export function MessageList({ messages, streamingId, onReview }: Props) {
+export function MessageList({ messages, streamingId, onReview, onUseTemplate }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = containerRef.current;
@@ -18,7 +21,7 @@ export function MessageList({ messages, streamingId, onReview }: Props) {
 
   if (!messages.length) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 py-6 text-center">
         <div className="rounded-full bg-gaspoll-50 p-3 text-gaspoll-600">
           <svg
             width="22"
@@ -34,11 +37,18 @@ export function MessageList({ messages, streamingId, onReview }: Props) {
           </svg>
         </div>
         <h2 className="mt-3 text-sm font-semibold text-slate-800">Build something with GASPOLL</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Describe the Apps Script app or automation you want. When the assistant replies with
-          fenced code blocks tagged with file names (e.g. <code>js Code.gs</code>), a Review button
-          appears so you can apply them directly to your project.
+        <p className="mt-1 max-w-sm text-xs text-slate-500">
+          Describe the Apps Script app or automation you want — or pick a template below to start
+          fast. When the assistant replies with fenced code blocks tagged with file names (e.g.{' '}
+          <code>js Code.gs</code>), a Review button appears so you can apply them directly to your
+          project.
         </p>
+        <div className="mt-5 w-full max-w-md text-left">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Starter templates
+          </div>
+          <TemplateGallery onUseTemplate={onUseTemplate} />
+        </div>
       </div>
     );
   }
