@@ -8,6 +8,7 @@ import {
   updateProjectContent,
 } from '@/shared/appsScriptApi';
 import { applyPatch, buildPatch, type ProjectPatch } from '@/shared/patch';
+import { enhancePrompt } from '@/shared/promptEnhancer';
 
 /**
  * Background service worker — central router.
@@ -74,6 +75,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         try {
           await applyPatch((msg as { patch: ProjectPatch }).patch);
           sendResponse({ ok: true });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.ENHANCE_PROMPT:
+      void (async () => {
+        try {
+          const { providerId, model, text } = msg as {
+            providerId: ProviderId;
+            model: string;
+            text: string;
+          };
+          const enhanced = await enhancePrompt({ providerId, model, text });
+          sendResponse({ ok: true, text: enhanced });
         } catch (err) {
           sendResponse(toErrorPayload(err));
         }

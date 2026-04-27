@@ -19,6 +19,7 @@ import { Header } from './components/Header';
 import { ConversationsDrawer } from './components/ConversationsDrawer';
 import { ReviewPanel } from './components/ReviewPanel';
 import type { ExtractedFile } from '@/shared/codeBlocks';
+import type { Template } from '@/shared/templates';
 
 export function SidePanelApp() {
   const [scriptId, setScriptId] = useState<string>(UNKNOWN_SCRIPT_ID);
@@ -30,6 +31,7 @@ export function SidePanelApp() {
   const [reviewing, setReviewing] = useState<{ files: ExtractedFile[]; messageId: string } | null>(
     null,
   );
+  const [composerSeed, setComposerSeed] = useState<{ value: string; nonce: number } | null>(null);
 
   const refreshSettings = useCallback(async () => {
     const next = await getSettings();
@@ -221,6 +223,12 @@ export function SidePanelApp() {
           messages={session.messages}
           streamingId={session.streamingId}
           onReview={(files, messageId) => setReviewing({ files, messageId })}
+          onUseTemplate={(t: Template) => {
+            setComposerSeed({ value: t.prompt, nonce: Date.now() });
+            if (t.bootstrap?.length) {
+              setReviewing({ files: t.bootstrap, messageId: `template:${t.id}` });
+            }
+          }}
         />
 
         {session.error ? (
@@ -239,6 +247,7 @@ export function SidePanelApp() {
           pending={session.pending}
           disabled={composerDisabled}
           providerKeyMissing={!providerHasKey}
+          seedText={composerSeed}
         />
       </main>
 

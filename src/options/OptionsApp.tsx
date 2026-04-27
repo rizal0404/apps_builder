@@ -4,7 +4,18 @@ import { getApiKey, getSettings, hasApiKey, setApiKey, setSettings } from '@/sha
 import { isValidLicenseFormat, parseLicense } from '@/shared/license';
 import { StorageKey } from '@/shared/constants';
 
-const PROVIDERS: ProviderId[] = [ProviderId.OPENROUTER];
+const PROVIDERS: ProviderId[] = [ProviderId.OPENROUTER, ProviderId.GEMINI];
+
+const PROVIDER_HELP: Record<ProviderId, { keyHelp: string; keyUrl?: string }> = {
+  [ProviderId.OPENROUTER]: {
+    keyHelp: 'Get a key from openrouter.ai → Keys.',
+    keyUrl: 'https://openrouter.ai/keys',
+  },
+  [ProviderId.GEMINI]: {
+    keyHelp: 'Get a key from Google AI Studio → API keys.',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+  },
+};
 
 export function OptionsApp() {
   const [provider, setProvider] = useState<ProviderId>(ProviderId.OPENROUTER);
@@ -109,6 +120,24 @@ export function OptionsApp() {
             ))}
           </select>
         </label>
+
+        <p className="mt-2 text-[11px] text-slate-500">
+          {PROVIDER_HELP[provider].keyHelp}
+          {PROVIDER_HELP[provider].keyUrl ? (
+            <>
+              {' '}
+              <a
+                href={PROVIDER_HELP[provider].keyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-gaspoll-700"
+              >
+                Open
+              </a>
+              .
+            </>
+          ) : null}
+        </p>
 
         <label className="mt-4 block">
           <span className="text-xs font-medium text-slate-600">
