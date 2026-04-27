@@ -22,6 +22,7 @@
     "package": "pnpm build && cd dist && zip -r ../gaspoll-extension.zip ."
   },
   "dependencies": {
+    "idb": "^8.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

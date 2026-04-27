@@ -59,7 +59,17 @@ To load the extension in Chrome:
 5. Open any Apps Script project at `https://script.google.com/...` — the content script
    announces itself in the page console (`[GASPOLL] content script loaded on …`).
 
-## Repository layout (Phase 0)
+## Configuration
+
+1. Build & load the extension (see steps above).
+2. Open Chrome's GASPOLL options page (chrome://extensions → GASPOLL → Details → "Extension
+   options").
+3. Paste your OpenRouter API key in the **API key** field, choose a default model
+   (e.g. `openrouter/auto`), tweak the system prompt, and click **Save settings**.
+4. Open the side panel — you can now chat. Conversations are scoped to the active Apps
+   Script project (`scriptId`) and persisted in IndexedDB.
+
+## Repository layout
 
 ```
 .
@@ -71,12 +81,23 @@ To load the extension in Chrome:
 ├── src/
 │   ├── assets/               # extension icons (16/32/48/128)
 │   ├── background/
-│   │   └── service-worker.ts # message router stub
+│   │   └── service-worker.ts # message router + chat streaming port
 │   ├── content/
 │   │   ├── inject.ts         # content script (ISOLATED world)
 │   │   └── monaco-bridge.ts  # content script (MAIN world) — reaches window.monaco
+│   ├── providers/
+│   │   ├── types.ts          # IProvider interface
+│   │   ├── sse.ts            # Server-Sent Events parser
+│   │   ├── openrouter.ts     # OpenRouter adapter (streaming)
+│   │   └── registry.ts       # provider lookup
 │   ├── shared/
-│   │   ├── constants.ts
+│   │   ├── constants.ts      # MsgType, StorageKey, ProviderId, DEFAULT_MODELS, …
+│   │   ├── types.ts          # ChatMessage / Conversation / Settings
+│   │   ├── id.ts             # 128-bit random ids
+│   │   ├── scriptId.ts       # detect Apps Script id from a tab URL
+│   │   ├── crypto.ts         # AES-GCM encrypt/decrypt for API keys
+│   │   ├── storage.ts        # chrome.storage.local facade
+│   │   ├── db.ts             # IndexedDB wrapper for chat history
 │   │   └── license.ts        # GSP-XXX-XXX-XXX-{FREE|PLUS|PRO} key validator
 │   ├── sidepanel/            # React side-panel UI (default UI surface)
 │   └── options/              # React options page
