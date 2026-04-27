@@ -15,16 +15,16 @@ This repository hosts the extension only. Landing page, license server, and memb
 
 This is a **closed-source commercial project** (LTD model — see [PLAN.md](./PLAN.md) §10).
 
-Current phase: **Phase 0 — repo skeleton**.
+Current phase: **Phase 2 — Apps Script REST API + Review mode**.
 
-| Phase | Scope                                                                                              | Status      |
-| ----- | -------------------------------------------------------------------------------------------------- | ----------- |
-| 0     | Repo, build pipeline, manifest MV3, side-panel skeleton, CI                                        | in progress |
-| 1     | Chat MVP with OpenRouter; encrypted API key storage; chat history per scriptId                     | planned     |
-| 2     | Apps Script REST API integration (`projects.getContent` / `updateContent`); Monaco bridge fallback | planned     |
-| 3     | Gemini provider; prompt enhancer; design skills; template gallery                                  | planned     |
-| 4     | Autonomous mode (tool-calling planner) + publish web app                                           | planned     |
-| 5     | Polish: live preview, license validator, telemetry, web-store submission                           | planned     |
+| Phase | Scope                                                                                                                                      | Status      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| 0     | Repo, build pipeline, manifest MV3, side-panel skeleton, CI                                                                                | shipped     |
+| 1     | Chat MVP with OpenRouter; encrypted API key storage; chat history per scriptId                                                             | shipped     |
+| 2     | Apps Script REST API integration (`projects.getContent` / `updateContent`); Review mode + diff/Apply UI; Monaco MAIN-world bridge fallback | in progress |
+| 3     | Gemini provider; prompt enhancer; design skills; template gallery                                                                          | planned     |
+| 4     | Autonomous mode (tool-calling planner) + publish web app                                                                                   | planned     |
+| 5     | Polish: live preview, license validator, telemetry, web-store submission                                                                   | planned     |
 
 See [`system_map.md`](./system_map.md) for the live map of files and modules.
 
@@ -69,6 +69,54 @@ To load the extension in Chrome:
 4. Open the side panel — you can now chat. Conversations are scoped to the active Apps
    Script project (`scriptId`) and persisted in IndexedDB.
 
+### Apps Script OAuth setup (required for Review-mode "Apply")
+
+The **Apply to project** button calls the Apps Script REST API
+(`projects.getContent` / `updateContent`) using `chrome.identity.getAuthToken`. To use it
+in a dev / unpacked build:
+
+1. In **Google Cloud Console**, create a new project (or reuse one).
+2. Enable the **Apps Script API**
+   (https://console.cloud.google.com/apis/library/script.googleapis.com).
+3. Configure the **OAuth consent screen** (External, Testing mode is fine for personal use).
+   Add your Google account as a Test user.
+4. Create an **OAuth client ID** of type **Chrome App**. Paste your unpacked extension's id
+   (visible at `chrome://extensions` once you load the unpacked build).
+5. Build with the client id wired in:
+   ```bash
+   GASPOLL_OAUTH_CLIENT_ID=123456789-abcdef.apps.googleusercontent.com pnpm build
+   ```
+   The id ends up in `manifest.json` under `oauth2.client_id`.
+6. The very first time you click **Apply** in Review mode, Chrome pops the consent screen.
+   Approve it; subsequent calls reuse the cached token.
+7. The user must also enable the Apps Script API for their account at
+   https://script.google.com/home/usersettings (one-time per Google account).
+
+## Review mode (Phase 2)
+
+When the assistant replies with fenced code blocks tagged with file names — e.g.:
+
+````markdown
+```js Code.gs
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index');
+}
+```
+
+```html Index.html
+<!doctype html>
+<h1>Hello GASPOLL</h1>
+```
+
+```json appsscript.json
+{ "timeZone": "Asia/Jakarta", "runtimeVersion": "V8" }
+```
+````
+
+…the message bubble grows a **Review N files** button. Clicking it opens a side-panel diff
+view comparing the proposal against the current `getContent` snapshot, with NEW/EDIT/NOOP
+badges per file. Hit **Apply to project** to push the merged set through `updateContent`.
+
 ## Repository layout
 
 ```
@@ -83,7 +131,7 @@ To load the extension in Chrome:
 │   ├── background/
 │   │   └── service-worker.ts # message router + chat streaming port
 │   ├── content/
-│   │   ├── inject.ts         # content script (ISOLATED world)
+│   │   ├── inject.ts         # content script (ISOLATED world) — RPC bridge
 │   │   └── monaco-bridge.ts  # content script (MAIN world) — reaches window.monaco
 │   ├── providers/
 │   │   ├── types.ts          # IProvider interface
@@ -98,6 +146,11 @@ To load the extension in Chrome:
 │   │   ├── crypto.ts         # AES-GCM encrypt/decrypt for API keys
 │   │   ├── storage.ts        # chrome.storage.local facade
 │   │   ├── db.ts             # IndexedDB wrapper for chat history
+│   │   ├── oauth.ts          # chrome.identity.getAuthToken wrapper
+│   │   ├── appsScriptApi.ts  # projects.getContent / updateContent client
+│   │   ├── codeBlocks.ts     # parse fenced AI output → ExtractedFile[]
+│   │   ├── diff.ts           # tiny LCS line-diff for Review mode
+│   │   ├── patch.ts          # build / apply ProjectPatch
 │   │   └── license.ts        # GSP-XXX-XXX-XXX-{FREE|PLUS|PRO} key validator
 │   ├── sidepanel/            # React side-panel UI (default UI surface)
 │   └── options/              # React options page

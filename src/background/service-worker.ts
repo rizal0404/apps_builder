@@ -2,6 +2,12 @@ import { MsgType, PortName, ProviderId } from '@/shared/constants';
 import { getApiKey } from '@/shared/storage';
 import type { ChatRequest } from '@/shared/types';
 import { getProvider } from '@/providers/registry';
+import {
+  AppsScriptApiError,
+  getProjectContent,
+  updateProjectContent,
+} from '@/shared/appsScriptApi';
+import { applyPatch, buildPatch, type ProjectPatch } from '@/shared/patch';
 
 /**
  * Background service worker — central router.
@@ -22,12 +28,71 @@ chrome.runtime.onInstalled.addListener((details) => {
     .catch((err) => console.warn('[GASPOLL] sidePanel.setPanelBehavior failed', err));
 });
 
+function toErrorPayload(err: unknown): { ok: false; error: string; code?: string } {
+  if (err instanceof AppsScriptApiError) {
+    return {
+      ok: false,
+      error: err.message,
+      code: err.status === 403 ? 'apps_script_api_disabled' : `http_${err.status}`,
+    };
+  }
+  return { ok: false, error: err instanceof Error ? err.message : String(err) };
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object' || !('type' in msg)) return undefined;
   switch (msg.type) {
     case MsgType.PING:
       sendResponse({ ok: true, pong: Date.now() });
       return undefined;
+    case MsgType.GET_PROJECT_CONTENT:
+      void (async () => {
+        try {
+          const content = await getProjectContent((msg as { scriptId: string }).scriptId);
+          sendResponse({ ok: true, content });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.BUILD_PATCH:
+      void (async () => {
+        try {
+          const { scriptId, files } = msg as {
+            scriptId: string;
+            files: import('@/shared/codeBlocks').ExtractedFile[];
+          };
+          const patch = await buildPatch(scriptId, files);
+          sendResponse({ ok: true, patch });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.APPLY_PATCH:
+      void (async () => {
+        try {
+          await applyPatch((msg as { patch: ProjectPatch }).patch);
+          sendResponse({ ok: true });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.UPDATE_PROJECT_CONTENT:
+      void (async () => {
+        try {
+          const { scriptId, files } = msg as {
+            scriptId: string;
+            files: import('@/shared/appsScriptApi').AppsScriptFile[];
+          };
+          const content = await updateProjectContent(scriptId, files);
+          sendResponse({ ok: true, content });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
     default:
       return undefined;
   }

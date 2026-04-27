@@ -17,6 +17,8 @@ import { Composer } from './components/Composer';
 import { MessageList } from './components/MessageList';
 import { Header } from './components/Header';
 import { ConversationsDrawer } from './components/ConversationsDrawer';
+import { ReviewPanel } from './components/ReviewPanel';
+import type { ExtractedFile } from '@/shared/codeBlocks';
 
 export function SidePanelApp() {
   const [scriptId, setScriptId] = useState<string>(UNKNOWN_SCRIPT_ID);
@@ -25,6 +27,9 @@ export function SidePanelApp() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reviewing, setReviewing] = useState<{ files: ExtractedFile[]; messageId: string } | null>(
+    null,
+  );
 
   const refreshSettings = useCallback(async () => {
     const next = await getSettings();
@@ -212,7 +217,11 @@ export function SidePanelApp() {
           </div>
         ) : null}
 
-        <MessageList messages={session.messages} streamingId={session.streamingId} />
+        <MessageList
+          messages={session.messages}
+          streamingId={session.streamingId}
+          onReview={(files, messageId) => setReviewing({ files, messageId })}
+        />
 
         {session.error ? (
           <div className="mx-3 mb-2 rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800">
@@ -232,6 +241,14 @@ export function SidePanelApp() {
           providerKeyMissing={!providerHasKey}
         />
       </main>
+
+      {reviewing ? (
+        <ReviewPanel
+          scriptId={scriptId}
+          files={reviewing.files}
+          onClose={() => setReviewing(null)}
+        />
+      ) : null}
     </div>
   );
 }

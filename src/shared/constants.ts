@@ -13,6 +13,7 @@ export const enum MsgType {
   APPLY_PATCH = 'gaspoll:apply-patch',
   GET_PROJECT_CONTENT = 'gaspoll:get-project-content',
   UPDATE_PROJECT_CONTENT = 'gaspoll:update-project-content',
+  BUILD_PATCH = 'gaspoll:build-patch',
 }
 
 /** chrome.runtime.connect port names. */

@@ -3,8 +3,10 @@
 > **Live document.** Update this file in every PR that adds, removes, or moves a runtime module
 > or build configuration. Reviewers should reject PRs whose code changes are not reflected here.
 
-Last updated: **Phase 1 / Chat MVP** — adds OpenRouter streaming chat, encrypted API-key
-storage, IndexedDB chat history, and a real side-panel chat UI.
+Last updated: **Phase 2 / Apps Script REST + Review mode** — adds OAuth via
+`chrome.identity`, the `projects.getContent` / `updateContent` client, an AI-output
+parser, a diff/Apply Review panel, and a Monaco MAIN-world RPC bridge for the
+live-typing fallback.
 
 ---
 
@@ -69,16 +71,21 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 
 ### Source — shared
 
-| Path                      | Purpose                                                                                                   |
-| ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `src/shared/constants.ts` | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS` |
-| `src/shared/types.ts`     | `ChatMessage`, `Conversation`, `Settings`, `ChatRequest`, `DEFAULT_SYSTEM_PROMPT`                         |
-| `src/shared/id.ts`        | `generateId(prefix?)` — 128-bit random hex id                                                             |
-| `src/shared/scriptId.ts`  | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                |
-| `src/shared/crypto.ts`    | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                    |
-| `src/shared/storage.ts`   | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                              |
-| `src/shared/db.ts`        | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                        |
-| `src/shared/license.ts`   | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                    |
+| Path                          | Purpose                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `src/shared/constants.ts`     | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS`     |
+| `src/shared/types.ts`         | `ChatMessage`, `Conversation`, `Settings`, `ChatRequest`, `DEFAULT_SYSTEM_PROMPT`                             |
+| `src/shared/id.ts`            | `generateId(prefix?)` — 128-bit random hex id                                                                 |
+| `src/shared/scriptId.ts`      | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                    |
+| `src/shared/crypto.ts`        | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                        |
+| `src/shared/storage.ts`       | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                                  |
+| `src/shared/db.ts`            | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                            |
+| `src/shared/oauth.ts`         | `chrome.identity.getAuthToken` wrapper + cache busting on 401                                                 |
+| `src/shared/appsScriptApi.ts` | `getProjectContent` / `updateProjectContent` REST client; surfaces `apps_script_api_disabled`                 |
+| `src/shared/codeBlocks.ts`    | Parses fenced AI code blocks (`js Code.gs`, `html Index.html`, `json appsscript.json`) into `ExtractedFile[]` |
+| `src/shared/diff.ts`          | LCS-based line diff used by the Review panel                                                                  |
+| `src/shared/patch.ts`         | `buildPatch(scriptId, proposed)` + `applyPatch(patch)`                                                        |
+| `src/shared/license.ts`       | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                        |
 
 ### Source — providers
 
@@ -91,11 +98,11 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 
 ### Source — background / content
 
-| Path                               | Purpose                                                                                                                       |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `src/background/service-worker.ts` | Routes `MsgType.PING`; owns `PortName.CHAT` streaming session, decrypts API key, calls provider, abort on disconnect / cancel |
-| `src/content/inject.ts`            | ISOLATED-world content script; PING healthcheck on `script.google.com`                                                        |
-| `src/content/monaco-bridge.ts`     | MAIN-world stub for future Monaco bridge                                                                                      |
+| Path                               | Purpose                                                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/background/service-worker.ts` | Routes `PING`, `GET_PROJECT_CONTENT`, `BUILD_PATCH`, `APPLY_PATCH`, `UPDATE_PROJECT_CONTENT`; owns `PortName.CHAT` streaming session with `safePost` against disconnected ports |
+| `src/content/inject.ts`            | ISOLATED-world content script; PING + RPC bridge to the MAIN-world Monaco helper                                                                                                |
+| `src/content/monaco-bridge.ts`     | MAIN-world Monaco helper (`ping`, `getActiveModelText`, `replaceActiveModelText`) used as a live-typing fallback                                                                |
 
 ### Source — side panel
 
@@ -106,10 +113,13 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 | `src/sidepanel/styles.css`                         | Tailwind entry                                                                     |
 | `src/sidepanel/SidePanelApp.tsx`                   | Root component: conversation lifecycle, scriptId binding, settings sync            |
 | `src/sidepanel/useChatSession.ts`                  | Hook — opens chat port, dispatches reducer for streaming, persists messages to IDB |
+| `src/sidepanel/api.ts`                             | Promisified `chrome.runtime.sendMessage` helpers for the REST/Review flows         |
 | `src/sidepanel/components/Header.tsx`              | Top bar (drawer toggle, brand, scriptId pill, new-chat, settings)                  |
-| `src/sidepanel/components/MessageList.tsx`         | Scrollable transcript with empty state                                             |
+| `src/sidepanel/components/MessageList.tsx`         | Scrollable transcript with empty state + per-bubble “Review N files” affordance    |
 | `src/sidepanel/components/Composer.tsx`            | Provider/model picker + textarea + send/stop                                       |
 | `src/sidepanel/components/ConversationsDrawer.tsx` | Sidebar list of conversations for the current scriptId                             |
+| `src/sidepanel/components/DiffView.tsx`            | Renders a `DiffResult` as a side-by-side gutter table                              |
+| `src/sidepanel/components/ReviewPanel.tsx`         | Modal-style overlay: file list → diff → Apply (or Apps Script API hint)            |
 
 ### Source — options
 
@@ -128,6 +138,15 @@ exchanges use `chrome.runtime.sendMessage` with the `MsgType` enum from
 | `system_map.md` | **This file.** Live map of modules.                                      |
 
 ---
+
+### OAuth
+
+`manifest.config.ts` injects `oauth2.client_id` from `process.env.GASPOLL_OAUTH_CLIENT_ID`
+(falls back to a placeholder for dev). Scopes:
+
+- `https://www.googleapis.com/auth/script.projects` (read/write Apps Script project files)
+- `https://www.googleapis.com/auth/drive.scripts` (Drive scope required for the API)
+- `https://www.googleapis.com/auth/userinfo.email`
 
 ## 3. Manifest permissions
 
@@ -152,15 +171,16 @@ Host permissions:
 
 ## 4. Message types
 
-| `MsgType`                                        | Direction                                    | Phase implemented |
-| ------------------------------------------------ | -------------------------------------------- | ----------------- |
-| `PING`                                           | sidepanel/content → background               | 0                 |
-| `GET_SCRIPT_CONTEXT`                             | sidepanel → content                          | 2 (planned)       |
-| `AI_CHAT_CHUNK`                                  | background → sidepanel (streaming, via Port) | **1 ✓**           |
-| `AI_CHAT_DONE`                                   | background → sidepanel (Port)                | **1 ✓**           |
-| `AI_CHAT_ERROR`                                  | background → sidepanel (Port)                | **1 ✓**           |
-| `APPLY_PATCH`                                    | sidepanel → background                       | 2 (planned)       |
-| `GET_PROJECT_CONTENT` / `UPDATE_PROJECT_CONTENT` | sidepanel → background                       | 2 (planned)       |
+| `MsgType`                                        | Direction                                                                  | Phase implemented |
+| ------------------------------------------------ | -------------------------------------------------------------------------- | ----------------- |
+| `PING`                                           | sidepanel/content → background / content                                   | 0                 |
+| `GET_SCRIPT_CONTEXT`                             | sidepanel → content (Monaco ping)                                          | **2 ✓**           |
+| `AI_CHAT_CHUNK`                                  | background → sidepanel (streaming, via Port)                               | **1 ✓**           |
+| `AI_CHAT_DONE`                                   | background → sidepanel (Port)                                              | **1 ✓**           |
+| `AI_CHAT_ERROR`                                  | background → sidepanel (Port)                                              | **1 ✓**           |
+| `BUILD_PATCH`                                    | sidepanel → background (build a `ProjectPatch` from `ExtractedFile[]`)     | **2 ✓**           |
+| `APPLY_PATCH`                                    | sidepanel → background (REST) **or** sidepanel → content (Monaco fallback) | **2 ✓**           |
+| `GET_PROJECT_CONTENT` / `UPDATE_PROJECT_CONTENT` | sidepanel → background                                                     | **2 ✓**           |
 
 `PortName.CHAT` is the long-lived port name used by `useChatSession` to ship `ChatRequest`
 messages and `{ type: 'cancel' }` instructions to the background worker.
@@ -188,7 +208,13 @@ module, add a note in the changelog at the bottom.
 
 ### Changelog
 
-- **Phase 1 (this PR):** OpenRouter SSE provider, AES-GCM encrypted API-key storage,
+- **Phase 2 (this PR):** OAuth via `chrome.identity.getAuthToken`, Apps Script REST client
+  (`getProjectContent` / `updateProjectContent`), fenced-block parser → `ExtractedFile[]`,
+  LCS line-diff, `buildPatch` / `applyPatch`, Review-mode UI (`ReviewPanel` + `DiffView`),
+  background routes for `GET_PROJECT_CONTENT` / `BUILD_PATCH` / `APPLY_PATCH` /
+  `UPDATE_PROJECT_CONTENT`, Monaco MAIN-world RPC (`ping`, `getActiveModelText`,
+  `replaceActiveModelText`) wired through the ISOLATED content script.
+- **Phase 1:** OpenRouter SSE provider, AES-GCM encrypted API-key storage,
   IndexedDB chat history (`conversations`, `messages`), `useChatSession` hook over
   `PortName.CHAT`, side-panel UI (Header / MessageList / Composer / Drawer), real options
   page (provider, key, model, system prompt, license), `scriptId` parser, `idb` dependency.
