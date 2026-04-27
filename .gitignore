@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-zip
+*.zip
+.DS_Store
+.vite
+.cache
+*.log
+.env
+.env.*
+!.env.example
+.eslintcache
+coverage
+*.tsbuildinfo

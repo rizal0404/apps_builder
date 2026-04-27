@@ -1,0 +1,19 @@
+Copyright (c) 2026 rizal0404. All rights reserved.
+
+GASPOLL is proprietary, closed-source software. No part of the source code in this
+repository may be copied, modified, distributed, sublicensed, sold, or used to derive
+another product without prior written permission from the copyright holder.
+
+Access to this repository — for example via collaborator invite, deploy key, or CI
+artifact — does NOT grant any license to the code. Authorized contributors may modify
+the code only for the purpose of contributing back to this repository under the same
+terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF
+THE SOFTWARE.
+
+GASPOLL is not affiliated with Google LLC. "Google Apps Script" is a trademark of
+Google LLC.
