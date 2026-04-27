@@ -1,6 +1,15 @@
 import { defineManifest } from '@crxjs/vite-plugin';
 import pkg from './package.json' with { type: 'json' };
 
+/**
+ * The OAuth client id used by `chrome.identity.getAuthToken` for Apps Script REST calls.
+ * In production this is filled from the `GASPOLL_OAUTH_CLIENT_ID` env var at build time.
+ * In dev it falls back to a placeholder; OAuth calls will fail until the user wires their
+ * own OAuth client (see README §Apps Script OAuth setup).
+ */
+const OAUTH_CLIENT_ID =
+  process.env.GASPOLL_OAUTH_CLIENT_ID ?? 'PLACEHOLDER.apps.googleusercontent.com';
+
 export default defineManifest({
   manifest_version: 3,
   name: 'GASPOLL — AI App Builder for Google Apps Script',
@@ -48,6 +57,14 @@ export default defineManifest({
     },
   ],
   permissions: ['storage', 'identity', 'sidePanel', 'tabs', 'scripting'],
+  oauth2: {
+    client_id: OAUTH_CLIENT_ID,
+    scopes: [
+      'https://www.googleapis.com/auth/script.projects',
+      'https://www.googleapis.com/auth/drive.scripts',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
+  },
   host_permissions: [
     'https://script.google.com/*',
     'https://script.googleapis.com/*',
