@@ -23,7 +23,8 @@ export interface Template {
 
 const APPSSCRIPT_JSON_WEB_APP: ExtractedFile = {
   type: 'JSON',
-  name: 'appsscript.json',
+  // Apps Script API stores manifest under the key "appsscript" (no extension).
+  name: 'appsscript',
   source: JSON.stringify(
     {
       timeZone: 'Asia/Jakarta',

@@ -41,18 +41,21 @@ export const geminiProvider: IProvider = {
     req: ProviderChatRequest,
     onChunk: (c: ProviderChatChunk) => void,
   ): Promise<ProviderChatResult> {
-    const url =
-      `${ENDPOINT_BASE}/${encodeURIComponent(req.model)}:streamGenerateContent` +
-      `?alt=sse&key=${encodeURIComponent(req.apiKey)}`;
+    const url = `${ENDPOINT_BASE}/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
     const body: Record<string, unknown> = {
       contents: buildContents(req.messages),
     };
     if (req.systemPrompt) {
       body.systemInstruction = { parts: [{ text: req.systemPrompt }] };
     }
+    // Send the API key via the header rather than as a URL query parameter so it
+    // doesn't end up in chrome://net-export logs, proxy access logs, etc.
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': req.apiKey,
+      },
       body: JSON.stringify(body),
       signal: req.signal,
     });
