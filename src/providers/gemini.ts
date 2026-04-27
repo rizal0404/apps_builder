@@ -5,13 +5,17 @@ import type {
   IProvider,
   ProviderChatChunk,
   ProviderChatRequest,
+  ProviderChatRequestWithTools,
   ProviderChatResult,
+  ProviderChatResultWithTools,
+  ProviderToolCall,
 } from './types';
 
 const ENDPOINT_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 interface GeminiPart {
   text?: string;
+  functionCall?: { name: string; args: Record<string, unknown> };
 }
 
 interface GeminiCandidate {
@@ -90,4 +94,98 @@ export const geminiProvider: IProvider = {
     }
     return { text: fullText, finishReason };
   },
+
+  async streamChatWithTools(
+    req: ProviderChatRequestWithTools,
+    onChunk: (c: ProviderChatChunk) => void,
+  ): Promise<ProviderChatResultWithTools> {
+    const url = `${ENDPOINT_BASE}/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
+
+    // Build contents with tool result messages
+    const contents: Array<Record<string, unknown>> = buildContents(req.messages);
+
+    // Append tool results as Gemini "function" role messages
+    if (req.toolMessages?.length) {
+      for (const tm of req.toolMessages) {
+        contents.push({
+          role: 'function',
+          parts: [
+            {
+              functionResponse: {
+                name: tm.tool_call_id, // Gemini uses the function name here
+                response: { content: tm.content },
+              },
+            },
+          ],
+        });
+      }
+    }
+
+    // Convert OpenAI-format tools to Gemini functionDeclarations
+    const functionDeclarations = req.tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }));
+
+    const body: Record<string, unknown> = {
+      contents,
+      tools: [{ functionDeclarations }],
+    };
+    if (req.systemPrompt) {
+      body.systemInstruction = { parts: [{ text: req.systemPrompt }] };
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': req.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: req.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Gemini request failed: ${res.status} ${res.statusText} — ${text}`);
+    }
+
+    let fullText = '';
+    let finishReason: string | null = null;
+    const toolCalls: ProviderToolCall[] = [];
+    let tcIndex = 0;
+
+    for await (const data of parseSseStream(res.body)) {
+      if (data === '[DONE]') break;
+      let json: GeminiStreamChunk;
+      try {
+        json = JSON.parse(data) as GeminiStreamChunk;
+      } catch {
+        continue;
+      }
+      if (json.promptFeedback?.blockReason) {
+        throw new Error(`Gemini blocked the request: ${json.promptFeedback.blockReason}`);
+      }
+      const cand = json.candidates?.[0];
+      const parts = cand?.content?.parts ?? [];
+      for (const p of parts) {
+        if (p.text) {
+          fullText += p.text;
+          onChunk({ delta: p.text });
+        }
+        if (p.functionCall) {
+          toolCalls.push({
+            id: `gemini_tc_${tcIndex++}`,
+            name: p.functionCall.name,
+            arguments: JSON.stringify(p.functionCall.args),
+          });
+        }
+      }
+      if (cand?.finishReason) finishReason = cand.finishReason;
+    }
+
+    return { text: fullText, finishReason, toolCalls: toolCalls.length ? toolCalls : undefined };
+  },
 };
+

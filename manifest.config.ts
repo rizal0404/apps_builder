@@ -61,6 +61,8 @@ export default defineManifest({
     client_id: OAUTH_CLIENT_ID,
     scopes: [
       'https://www.googleapis.com/auth/script.projects',
+      'https://www.googleapis.com/auth/script.deployments',
+      'https://www.googleapis.com/auth/script.processes',
       'https://www.googleapis.com/auth/drive.scripts',
       'https://www.googleapis.com/auth/userinfo.email',
     ],

@@ -15,11 +15,22 @@ export const enum MsgType {
   UPDATE_PROJECT_CONTENT = 'gaspoll:update-project-content',
   BUILD_PATCH = 'gaspoll:build-patch',
   ENHANCE_PROMPT = 'gaspoll:enhance-prompt',
+  /** Phase 4 — Autonomous planner events */
+  PLANNER_PROGRESS = 'gaspoll:planner-progress',
+  PLANNER_TOOL_CALL = 'gaspoll:planner-tool-call',
+  PLANNER_TOOL_RESULT = 'gaspoll:planner-tool-result',
+  PLANNER_DONE = 'gaspoll:planner-done',
+  PLANNER_ERROR = 'gaspoll:planner-error',
+  /** Phase 4 — Deploy */
+  CREATE_VERSION = 'gaspoll:create-version',
+  CREATE_DEPLOYMENT = 'gaspoll:create-deployment',
+  RUN_FUNCTION = 'gaspoll:run-function',
 }
 
 /** chrome.runtime.connect port names. */
 export const enum PortName {
   CHAT = 'gaspoll-chat',
+  PLANNER = 'gaspoll-planner',
 }
 
 /** Persistent storage keys (chrome.storage.local). */

@@ -79,3 +79,46 @@ export async function enhancePromptViaBackground(
   });
   return resp.text;
 }
+
+// ── Phase 4: Version / Deploy / Run helpers ─────────────────────────────────────
+
+export async function createVersionViaBackground(
+  scriptId: string,
+  description: string,
+): Promise<import('@/shared/appsScriptApi').ScriptVersion> {
+  const resp = await send<{ version: import('@/shared/appsScriptApi').ScriptVersion }>({
+    type: MsgType.CREATE_VERSION,
+    scriptId,
+    description,
+  });
+  return resp.version;
+}
+
+export async function createDeploymentViaBackground(
+  scriptId: string,
+  versionNumber: number,
+  description: string,
+): Promise<import('@/shared/appsScriptApi').Deployment> {
+  const resp = await send<{ deployment: import('@/shared/appsScriptApi').Deployment }>({
+    type: MsgType.CREATE_DEPLOYMENT,
+    scriptId,
+    versionNumber,
+    description,
+  });
+  return resp.deployment;
+}
+
+export async function runFunctionViaBackground(
+  scriptId: string,
+  functionName: string,
+  parameters?: unknown[],
+): Promise<import('@/shared/appsScriptApi').RunResult> {
+  const resp = await send<{ result: import('@/shared/appsScriptApi').RunResult }>({
+    type: MsgType.RUN_FUNCTION,
+    scriptId,
+    functionName,
+    parameters,
+  });
+  return resp.result;
+}
+
