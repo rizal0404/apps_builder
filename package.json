@@ -1,0 +1,50 @@
+{
+  "name": "gaspoll",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GASPOLL — AI App Builder for Google Apps Script. Chrome extension that brings multi-provider AI into the Apps Script editor and writes code directly into the user's project, no copy-paste.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "author": "rizal0404",
+  "homepage": "https://github.com/rizal0404/apps_builder",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rizal0404/apps_builder.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -b --noEmit",
+    "package": "pnpm build && cd dist && zip -r ../gaspoll-extension.zip ."
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.27",
+    "@eslint/js": "^9.16.0",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "postcss": "^8.5.0",
+    "prettier": "^3.4.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vite": "^6.0.5"
+  },
+  "packageManager": "pnpm@9.15.1"
+}
