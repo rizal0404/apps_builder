@@ -1,89 +1,237 @@
-import { useEffect, useState } from 'react';
-import { APP_NAME, APP_TAGLINE, MsgType } from '@/shared/constants';
-
-type BackgroundStatus = 'unknown' | 'ok' | 'error';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  APP_NAME,
+  APP_TAGLINE,
+  DEFAULT_MODELS,
+  DEFAULT_PROVIDER,
+  ProviderId,
+} from '@/shared/constants';
+import { getActiveScriptId, UNKNOWN_SCRIPT_ID } from '@/shared/scriptId';
+import { hasApiKey, getSettings } from '@/shared/storage';
+import { listConversationsForScript, saveConversation, deleteConversation } from '@/shared/db';
+import { generateId } from '@/shared/id';
+import type { Conversation, Settings } from '@/shared/types';
+import { DEFAULT_SYSTEM_PROMPT } from '@/shared/types';
+import { useChatSession } from './useChatSession';
+import { Composer } from './components/Composer';
+import { MessageList } from './components/MessageList';
+import { Header } from './components/Header';
+import { ConversationsDrawer } from './components/ConversationsDrawer';
 
 export function SidePanelApp() {
-  const [bgStatus, setBgStatus] = useState<BackgroundStatus>('unknown');
-  const [bgPong, setBgPong] = useState<number | null>(null);
+  const [scriptId, setScriptId] = useState<string>(UNKNOWN_SCRIPT_ID);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [providerHasKey, setProviderHasKey] = useState<boolean>(false);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConv, setActiveConv] = useState<Conversation | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const refreshSettings = useCallback(async () => {
+    const next = await getSettings();
+    setSettings(next);
+    setProviderHasKey(await hasApiKey(next.defaultProvider));
+  }, []);
+
+  const refreshConversations = useCallback(async (sid: string) => {
+    const list = await listConversationsForScript(sid);
+    setConversations(list);
+    return list;
+  }, []);
+
+  // Bootstrap: detect scriptId, load settings, load (or create) a conversation.
   useEffect(() => {
     let mounted = true;
-    chrome.runtime
-      .sendMessage({ type: MsgType.PING })
-      .then((res: { ok?: boolean; pong?: number } | undefined) => {
-        if (!mounted) return;
-        if (res?.ok) {
-          setBgStatus('ok');
-          setBgPong(res.pong ?? null);
-        } else {
-          setBgStatus('error');
-        }
-      })
-      .catch(() => mounted && setBgStatus('error'));
+    void (async () => {
+      const sid = await getActiveScriptId();
+      if (!mounted) return;
+      setScriptId(sid);
+      const next = await getSettings();
+      if (!mounted) return;
+      setSettings(next);
+      setProviderHasKey(await hasApiKey(next.defaultProvider));
+      const list = await listConversationsForScript(sid);
+      if (!mounted) return;
+      setConversations(list);
+      if (list.length) {
+        setActiveConv(list[0]);
+      } else {
+        const c: Conversation = {
+          id: generateId('conv'),
+          scriptId: sid,
+          title: 'New chat',
+          providerId: next.defaultProvider,
+          model: next.defaultModel || DEFAULT_MODELS[next.defaultProvider][0],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await saveConversation(c);
+        setConversations([c]);
+        setActiveConv(c);
+      }
+    })();
     return () => {
       mounted = false;
     };
   }, []);
 
+  // Listen to chrome.tabs URL changes so the script id auto-refreshes.
+  useEffect(() => {
+    const onActivated = () => {
+      void getActiveScriptId().then((sid) => {
+        setScriptId(sid);
+        void refreshConversations(sid).then((list) => {
+          if (list.length) setActiveConv(list[0]);
+          else setActiveConv(null);
+        });
+      });
+    };
+    chrome.tabs?.onActivated.addListener(onActivated);
+    chrome.tabs?.onUpdated.addListener(onActivated);
+    return () => {
+      chrome.tabs?.onActivated.removeListener(onActivated);
+      chrome.tabs?.onUpdated.removeListener(onActivated);
+    };
+  }, [refreshConversations]);
+
+  // Listen for storage changes so the side panel reflects settings updates from the options page.
+  useEffect(() => {
+    const onStorage = () => void refreshSettings();
+    chrome.storage.onChanged.addListener(onStorage);
+    return () => chrome.storage.onChanged.removeListener(onStorage);
+  }, [refreshSettings]);
+
+  const session = useChatSession({
+    conversation: activeConv,
+    systemPrompt: settings?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+    onConversationSaved: (c) => {
+      setConversations((prev) => {
+        const without = prev.filter((p) => p.id !== c.id);
+        return [c, ...without];
+      });
+    },
+  });
+
+  const newChat = useCallback(async () => {
+    if (!settings) return;
+    const c: Conversation = {
+      id: generateId('conv'),
+      scriptId,
+      title: 'New chat',
+      providerId: settings.defaultProvider,
+      model: settings.defaultModel || DEFAULT_MODELS[settings.defaultProvider][0],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await saveConversation(c);
+    setConversations((prev) => [c, ...prev]);
+    setActiveConv(c);
+    setDrawerOpen(false);
+  }, [scriptId, settings]);
+
+  const switchConversation = useCallback(async (c: Conversation) => {
+    setActiveConv(c);
+    setDrawerOpen(false);
+  }, []);
+
+  const removeConversation = useCallback(
+    async (c: Conversation) => {
+      await deleteConversation(c.id);
+      const list = await refreshConversations(scriptId);
+      if (activeConv?.id === c.id) setActiveConv(list[0] ?? null);
+    },
+    [refreshConversations, scriptId, activeConv?.id],
+  );
+
+  const setModel = useCallback(
+    async (model: string) => {
+      if (!activeConv) return;
+      const next = { ...activeConv, model, updatedAt: Date.now() };
+      await saveConversation(next);
+      setActiveConv(next);
+      setConversations((prev) => prev.map((c) => (c.id === next.id ? next : c)));
+    },
+    [activeConv],
+  );
+
+  const setProvider = useCallback(
+    async (providerId: ProviderId) => {
+      if (!activeConv) return;
+      const fallbackModel = DEFAULT_MODELS[providerId][0];
+      const next = {
+        ...activeConv,
+        providerId,
+        model: fallbackModel,
+        updatedAt: Date.now(),
+      };
+      await saveConversation(next);
+      setActiveConv(next);
+      setProviderHasKey(await hasApiKey(providerId));
+    },
+    [activeConv],
+  );
+
+  const openOptions = useCallback(() => {
+    chrome.runtime.openOptionsPage?.();
+  }, []);
+
+  const composerDisabled = useMemo(
+    () => !activeConv || !providerHasKey || session.pending,
+    [activeConv, providerHasKey, session.pending],
+  );
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <div>
-          <div className="text-lg font-semibold tracking-tight text-gaspoll-600">{APP_NAME}</div>
-          <div className="text-xs text-slate-500">{APP_TAGLINE}</div>
-        </div>
-        <span
-          className={
-            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ' +
-            (bgStatus === 'ok'
-              ? 'bg-emerald-50 text-emerald-700'
-              : bgStatus === 'error'
-                ? 'bg-rose-50 text-rose-700'
-                : 'bg-slate-100 text-slate-600')
-          }
-          title={bgPong ? `pong @ ${new Date(bgPong).toISOString()}` : ''}
-        >
-          <span
-            className={
-              'h-1.5 w-1.5 rounded-full ' +
-              (bgStatus === 'ok'
-                ? 'bg-emerald-500'
-                : bgStatus === 'error'
-                  ? 'bg-rose-500'
-                  : 'bg-slate-400')
-            }
-          />
-          {bgStatus === 'ok' ? 'connected' : bgStatus === 'error' ? 'error' : 'connecting…'}
-        </span>
-      </header>
+    <div className="flex h-full flex-col bg-white">
+      <Header
+        appName={APP_NAME}
+        tagline={APP_TAGLINE}
+        scriptId={scriptId}
+        onNewChat={newChat}
+        onOpenOptions={openOptions}
+        onToggleDrawer={() => setDrawerOpen((o) => !o)}
+      />
 
-      <main className="flex-1 overflow-y-auto p-4">
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <h2 className="text-sm font-semibold text-slate-800">Hello, GASPOLL!</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Phase 0 skeleton is alive. Open a project on{' '}
-            <code className="rounded bg-white px-1 py-0.5 text-xs">script.google.com</code> and the
-            content script will announce itself in the page console.
-          </p>
-        </section>
+      {drawerOpen ? (
+        <ConversationsDrawer
+          conversations={conversations}
+          activeId={activeConv?.id ?? null}
+          onSwitch={switchConversation}
+          onDelete={removeConversation}
+          onClose={() => setDrawerOpen(false)}
+        />
+      ) : null}
 
-        <section className="mt-4 space-y-2 text-sm text-slate-600">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Coming next
-          </h3>
-          <ul className="list-disc space-y-1 pl-5">
-            <li>OpenRouter + Gemini providers (Phase 1)</li>
-            <li>Apps Script REST API integration (Phase 2)</li>
-            <li>Templates & design skills (Phase 3)</li>
-            <li>Autonomous mode + publish (Phase 4)</li>
-          </ul>
-        </section>
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {!providerHasKey ? (
+          <div className="m-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+            No API key configured for{' '}
+            <span className="font-semibold">{activeConv?.providerId ?? DEFAULT_PROVIDER}</span>.{' '}
+            <button onClick={openOptions} className="underline hover:text-amber-900">
+              Open settings to add one
+            </button>
+            .
+          </div>
+        ) : null}
+
+        <MessageList messages={session.messages} streamingId={session.streamingId} />
+
+        {session.error ? (
+          <div className="mx-3 mb-2 rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800">
+            {session.error}
+          </div>
+        ) : null}
+
+        <Composer
+          providerId={activeConv?.providerId ?? DEFAULT_PROVIDER}
+          model={activeConv?.model ?? DEFAULT_MODELS[DEFAULT_PROVIDER][0]}
+          onModelChange={setModel}
+          onProviderChange={setProvider}
+          onSend={session.sendUserMessage}
+          onCancel={session.cancel}
+          pending={session.pending}
+          disabled={composerDisabled}
+          providerKeyMissing={!providerHasKey}
+        />
       </main>
-
-      <footer className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-400">
-        v0.1.0 · Phase 0 · Not affiliated with Google LLC
-      </footer>
     </div>
   );
 }
