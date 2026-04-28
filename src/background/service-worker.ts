@@ -1,14 +1,18 @@
 import { MsgType, PortName, ProviderId } from '@/shared/constants';
 import { getApiKey } from '@/shared/storage';
-import type { ChatRequest } from '@/shared/types';
+import type { ChatRequest, PlannerRequest } from '@/shared/types';
 import { getProvider } from '@/providers/registry';
 import {
   AppsScriptApiError,
   getProjectContent,
   updateProjectContent,
+  createVersion,
+  createDeployment,
+  runFunction,
 } from '@/shared/appsScriptApi';
 import { applyPatch, buildPatch, type ProjectPatch } from '@/shared/patch';
 import { enhancePrompt } from '@/shared/promptEnhancer';
+import { createPlannerSession, type PlannerSession } from './planner';
 
 /**
  * Background service worker — central router.
@@ -17,9 +21,16 @@ import { enhancePrompt } from '@/shared/promptEnhancer';
  *   - PING/pong healthcheck
  *   - Streaming chat sessions over a long-lived port (PortName.CHAT)
  *
- * Real responsibilities to add later:
- *   - chrome.identity OAuth + Apps Script REST API client (Phase 2)
- *   - additional providers (Phase 3+)
+ * Phase 2 responsibilities:
+ *   - chrome.identity OAuth + Apps Script REST API client
+ *   - BUILD_PATCH / APPLY_PATCH / GET_PROJECT_CONTENT / UPDATE_PROJECT_CONTENT
+ *
+ * Phase 3 responsibilities:
+ *   - ENHANCE_PROMPT
+ *
+ * Phase 4 responsibilities:
+ *   - CREATE_VERSION / CREATE_DEPLOYMENT / RUN_FUNCTION
+ *   - PortName.PLANNER for autonomous agent loop
  */
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -109,13 +120,69 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
       })();
       return true;
+
+    // ── Phase 4: Version / Deploy / Run ─────────────────────────────
+    case MsgType.CREATE_VERSION:
+      void (async () => {
+        try {
+          const { scriptId, description } = msg as {
+            scriptId: string;
+            description: string;
+          };
+          const version = await createVersion(scriptId, description);
+          sendResponse({ ok: true, version });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.CREATE_DEPLOYMENT:
+      void (async () => {
+        try {
+          const { scriptId, versionNumber, description } = msg as {
+            scriptId: string;
+            versionNumber: number;
+            description: string;
+          };
+          const deployment = await createDeployment(scriptId, versionNumber, description);
+          sendResponse({ ok: true, deployment });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+    case MsgType.RUN_FUNCTION:
+      void (async () => {
+        try {
+          const { scriptId, functionName, parameters } = msg as {
+            scriptId: string;
+            functionName: string;
+            parameters?: unknown[];
+          };
+          const result = await runFunction(scriptId, functionName, parameters);
+          sendResponse({ ok: true, result });
+        } catch (err) {
+          sendResponse(toErrorPayload(err));
+        }
+      })();
+      return true;
+
     default:
       return undefined;
   }
 });
 
+// ── Chat port ───────────────────────────────────────────────────────────────────
+
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== PortName.CHAT) return;
+  if (port.name === PortName.CHAT) {
+    handleChatPort(port);
+  } else if (port.name === PortName.PLANNER) {
+    handlePlannerPort(port);
+  }
+});
+
+function handleChatPort(port: chrome.runtime.Port) {
   let aborter: AbortController | null = null;
   let connected = true;
 
@@ -170,4 +237,41 @@ chrome.runtime.onConnect.addListener((port) => {
       aborter = null;
     }
   });
-});
+}
+
+// ── Planner port (Phase 4) ──────────────────────────────────────────────────────
+
+function handlePlannerPort(port: chrome.runtime.Port) {
+  let session: PlannerSession | null = null;
+  let connected = true;
+
+  const safePost = (m: unknown) => {
+    if (!connected) return;
+    try {
+      port.postMessage(m);
+    } catch {
+      connected = false;
+    }
+  };
+
+  port.onDisconnect.addListener(() => {
+    connected = false;
+    session?.cancel();
+    session = null;
+  });
+
+  port.onMessage.addListener(async (msg: PlannerRequest | { type: 'cancel' }) => {
+    if ('type' in msg && (msg as { type: string }).type === 'cancel') {
+      session?.cancel();
+      return;
+    }
+
+    const req = msg as PlannerRequest;
+    session = createPlannerSession(req, (event) => {
+      safePost(event);
+    });
+
+    await session.run();
+    session = null;
+  });
+}

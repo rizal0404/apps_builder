@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { DEFAULT_MODELS, ProviderId } from '@/shared/constants';
 import { enhancePromptViaBackground } from '../api';
 
+export type ComposerMode = 'chat' | 'autonomous';
+
 interface Props {
   providerId: ProviderId;
   model: string;
@@ -9,11 +11,14 @@ interface Props {
   onModelChange: (model: string) => void;
   onSend: (text: string) => void | Promise<void>;
   onCancel: () => void;
+  onStartPlan?: (goal: string) => void;
   pending: boolean;
   disabled: boolean;
   providerKeyMissing: boolean;
   /** Imperative seed: when this changes, the textarea is replaced with the new value. */
   seedText?: { value: string; nonce: number } | null;
+  plannerRunning?: boolean;
+  onCancelPlan?: () => void;
 }
 
 const PROVIDERS: ProviderId[] = [ProviderId.OPENROUTER, ProviderId.GEMINI];
@@ -25,14 +30,18 @@ export function Composer({
   onModelChange,
   onSend,
   onCancel,
+  onStartPlan,
   pending,
   disabled,
   providerKeyMissing,
   seedText,
+  plannerRunning,
+  onCancelPlan,
 }: Props) {
   const [text, setText] = useState('');
   const [enhancing, setEnhancing] = useState(false);
   const [enhanceError, setEnhanceError] = useState<string | null>(null);
+  const [mode, setMode] = useState<ComposerMode>('chat');
 
   useEffect(() => {
     if (seedText) setText(seedText.value);
@@ -42,8 +51,14 @@ export function Composer({
     e?.preventDefault();
     const v = text.trim();
     if (!v || disabled) return;
-    void onSend(v);
-    setText('');
+
+    if (mode === 'autonomous' && onStartPlan) {
+      onStartPlan(v);
+      setText('');
+    } else {
+      void onSend(v);
+      setText('');
+    }
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -68,9 +83,42 @@ export function Composer({
   };
 
   const enhanceDisabled = !text.trim() || enhancing || pending || providerKeyMissing;
+  const isRunning = pending || plannerRunning;
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 border-t border-slate-200 bg-white p-3">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-1">
+        <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-[10px] font-medium">
+          <button
+            type="button"
+            onClick={() => setMode('chat')}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              mode === 'chat'
+                ? 'bg-white text-gaspoll-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            💬 Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('autonomous')}
+            className={`rounded px-2.5 py-1 transition-colors ${
+              mode === 'autonomous'
+                ? 'bg-white text-gaspoll-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            🤖 Autonomous
+          </button>
+        </div>
+        {mode === 'autonomous' && (
+          <span className="text-[9px] text-slate-400">AI agent with tool calling</span>
+        )}
+      </div>
+
+      {/* Provider / model picker */}
       <div className="flex items-center gap-2 text-xs text-slate-600">
         <select
           value={providerId}
@@ -105,11 +153,13 @@ export function Composer({
         placeholder={
           providerKeyMissing
             ? 'Add an API key in Settings to start chatting…'
-            : 'Describe what you want to build (Enter to send, Shift+Enter for newline)'
+            : mode === 'autonomous'
+              ? 'Describe the goal for the AI agent (e.g. "Create a web app that shows a dashboard")'
+              : 'Describe what you want to build (Enter to send, Shift+Enter for newline)'
         }
         rows={3}
         className="w-full resize-none rounded-md border border-slate-300 bg-white p-2 text-sm leading-5 focus:border-gaspoll-500 focus:outline-none"
-        disabled={(disabled && !pending) || enhancing}
+        disabled={(disabled && !isRunning) || enhancing}
       />
 
       {enhanceError ? (
@@ -131,12 +181,18 @@ export function Composer({
 
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400">
-            {pending ? 'Streaming…' : 'Press Enter to send'}
+            {isRunning
+              ? mode === 'autonomous'
+                ? 'Agent running…'
+                : 'Streaming…'
+              : mode === 'autonomous'
+                ? 'Press Enter to start'
+                : 'Press Enter to send'}
           </span>
-          {pending ? (
+          {isRunning ? (
             <button
               type="button"
-              onClick={onCancel}
+              onClick={plannerRunning ? onCancelPlan : onCancel}
               className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
             >
               Stop
@@ -145,9 +201,13 @@ export function Composer({
             <button
               type="submit"
               disabled={disabled || !text.trim()}
-              className="rounded-md bg-gaspoll-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-gaspoll-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className={`rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                mode === 'autonomous'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-gaspoll-600 hover:bg-gaspoll-700'
+              }`}
             >
-              Send
+              {mode === 'autonomous' ? '🚀 Run' : 'Send'}
             </button>
           )}
         </div>

@@ -62,3 +62,39 @@ export type ChatStreamEvent =
   | { type: 'chunk'; delta: string }
   | { type: 'done'; finishReason?: string }
   | { type: 'error'; error: string };
+
+// ───────────────────────── Phase 4: Autonomous mode types ─────────────────────────
+
+export interface ToolCallInfo {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolResultInfo {
+  toolCallId: string;
+  name: string;
+  result: string;
+  isError: boolean;
+}
+
+export interface PlannerRequest {
+  conversationId: string;
+  scriptId: string;
+  providerId: ProviderId;
+  model: string;
+  goal: string;
+  /** Previous chat messages to provide context. */
+  messages: ChatMessage[];
+  systemPrompt?: string;
+  maxIterations?: number;
+  maxTokens?: number;
+}
+
+export type PlannerEvent =
+  | { type: 'progress'; text: string }
+  | { type: 'tool_call'; call: ToolCallInfo }
+  | { type: 'tool_result'; result: ToolResultInfo }
+  | { type: 'iteration'; iteration: number; maxIterations: number }
+  | { type: 'done'; summary: string }
+  | { type: 'error'; error: string };

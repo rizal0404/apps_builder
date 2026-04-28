@@ -5,14 +5,25 @@ import type {
   IProvider,
   ProviderChatChunk,
   ProviderChatRequest,
+  ProviderChatRequestWithTools,
   ProviderChatResult,
+  ProviderChatResultWithTools,
+  ProviderToolCall,
+  WireMessage,
 } from './types';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface OpenRouterStreamChunk {
   choices?: Array<{
-    delta?: { content?: string };
+    delta?: {
+      content?: string;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
     finish_reason?: string | null;
   }>;
 }
@@ -21,6 +32,37 @@ function buildMessages(systemPrompt: string | undefined, messages: ChatMessage[]
   const out: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
   if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
   for (const m of messages) out.push({ role: m.role, content: m.content });
+  return out;
+}
+
+/**
+ * Build an OpenAI-compatible messages array from the planner's WireMessage
+ * history. Preserves `tool_calls` on assistant messages and emits tool-role
+ * messages with `tool_call_id` in the exact order required by the spec.
+ */
+function buildWireMessages(
+  systemPrompt: string | undefined,
+  messages: WireMessage[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
+  for (const m of messages) {
+    if (m.role === 'tool') {
+      out.push({
+        role: 'tool',
+        tool_call_id: m.tool_call_id,
+        content: m.content,
+      });
+    } else if (m.role === 'assistant' && 'tool_calls' in m) {
+      out.push({
+        role: 'assistant',
+        content: m.content,
+        tool_calls: m.tool_calls,
+      });
+    } else {
+      out.push({ role: m.role, content: m.content });
+    }
+  }
   return out;
 }
 
@@ -71,5 +113,81 @@ export const openRouterProvider: IProvider = {
       if (choice?.finish_reason) finishReason = choice.finish_reason;
     }
     return { text: fullText, finishReason };
+  },
+
+  async streamChatWithTools(
+    req: ProviderChatRequestWithTools,
+    onChunk: (c: ProviderChatChunk) => void,
+  ): Promise<ProviderChatResultWithTools> {
+    const messages = buildWireMessages(req.systemPrompt, req.messages);
+
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${req.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/rizal0404/apps_builder',
+        'X-Title': 'GASPOLL',
+      },
+      body: JSON.stringify({
+        model: req.model,
+        stream: true,
+        messages,
+        tools: req.tools,
+      }),
+      signal: req.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`OpenRouter request failed: ${res.status} ${res.statusText} — ${text}`);
+    }
+
+    let fullText = '';
+    let finishReason: string | null = null;
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+
+    for await (const data of parseSseStream(res.body)) {
+      if (data === '[DONE]') break;
+      let json: OpenRouterStreamChunk;
+      try {
+        json = JSON.parse(data) as OpenRouterStreamChunk;
+      } catch {
+        continue;
+      }
+      const choice = json.choices?.[0];
+
+      // Text delta
+      const textDelta = choice?.delta?.content;
+      if (textDelta) {
+        fullText += textDelta;
+        onChunk({ delta: textDelta });
+      }
+
+      // Tool call deltas — accumulate across chunks
+      const toolCallDeltas = choice?.delta?.tool_calls;
+      if (toolCallDeltas) {
+        for (const tcd of toolCallDeltas) {
+          const existing = toolCallsMap.get(tcd.index);
+          if (existing) {
+            if (tcd.function?.arguments) {
+              existing.arguments += tcd.function.arguments;
+            }
+          } else {
+            toolCallsMap.set(tcd.index, {
+              id: tcd.id ?? `tc_${tcd.index}`,
+              name: tcd.function?.name ?? '',
+              arguments: tcd.function?.arguments ?? '',
+            });
+          }
+        }
+      }
+
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+    }
+
+    const toolCalls: ProviderToolCall[] = Array.from(toolCallsMap.values()).filter((tc) => tc.name);
+
+    return { text: fullText, finishReason, toolCalls: toolCalls.length ? toolCalls : undefined };
   },
 };

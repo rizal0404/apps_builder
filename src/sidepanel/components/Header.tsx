@@ -7,6 +7,7 @@ interface HeaderProps {
   onNewChat: () => void;
   onOpenOptions: () => void;
   onToggleDrawer: () => void;
+  onDeploy?: () => void;
 }
 
 export function Header({
@@ -16,6 +17,7 @@ export function Header({
   onNewChat,
   onOpenOptions,
   onToggleDrawer,
+  onDeploy,
 }: HeaderProps) {
   const onScriptPage = scriptId !== UNKNOWN_SCRIPT_ID;
   return (
@@ -70,6 +72,17 @@ export function Header({
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
+          {onScriptPage && onDeploy && (
+            <button
+              type="button"
+              onClick={onDeploy}
+              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Deploy"
+              title="Deploy web app"
+            >
+              <span className="text-sm">🚀</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenOptions}
