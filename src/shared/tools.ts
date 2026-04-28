@@ -20,6 +20,7 @@ import {
   type AppsScriptFile,
   type AppsScriptFileType,
 } from './appsScriptApi';
+import { smartMerge } from './smartMerge';
 
 // ── Tool definition schema (OpenAI-compatible) ─────────────────────────────────
 
@@ -178,15 +179,18 @@ async function execWriteFile(
   const content = await getProjectContent(scriptId);
   const existing = content.files.find((f) => f.name === fileName && f.type === fileType);
 
+  // Smart merge: resolve truncation markers against the original source
+  const mergedSource = existing ? smartMerge(existing.source, source) : source;
+
   let updatedFiles: AppsScriptFile[];
   if (existing) {
-    // Update existing file
+    // Update existing file with smart-merged content
     updatedFiles = content.files.map((f) =>
-      f.name === fileName && f.type === fileType ? { ...f, source } : f,
+      f.name === fileName && f.type === fileType ? { ...f, source: mergedSource } : f,
     );
   } else {
     // Add new file
-    updatedFiles = [...content.files, { name: fileName, type: fileType, source }];
+    updatedFiles = [...content.files, { name: fileName, type: fileType, source: mergedSource }];
   }
 
   await updateProjectContent(scriptId, updatedFiles);

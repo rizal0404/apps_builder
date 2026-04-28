@@ -70,12 +70,16 @@ export async function enhancePromptViaBackground(
   providerId: string,
   model: string,
   text: string,
+  frontendStack?: string,
+  designSkill?: string,
 ): Promise<string> {
   const resp = await send<{ text: string }>({
     type: MsgType.ENHANCE_PROMPT,
     providerId,
     model,
     text,
+    frontendStack,
+    designSkill,
   });
   return resp.text;
 }

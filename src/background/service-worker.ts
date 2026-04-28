@@ -94,12 +94,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case MsgType.ENHANCE_PROMPT:
       void (async () => {
         try {
-          const { providerId, model, text } = msg as {
+          const { providerId, model, text, frontendStack, designSkill } = msg as {
             providerId: ProviderId;
             model: string;
             text: string;
+            frontendStack?: import('@/shared/constants').FrontendStackId;
+            designSkill?: import('@/shared/constants').DesignSkillId;
           };
-          const enhanced = await enhancePrompt({ providerId, model, text });
+          const enhanced = await enhancePrompt({ providerId, model, text, frontendStack, designSkill });
           sendResponse({ ok: true, text: enhanced });
         } catch (err) {
           sendResponse(toErrorPayload(err));

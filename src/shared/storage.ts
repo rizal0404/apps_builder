@@ -1,12 +1,32 @@
 import { DEFAULT_PROVIDER, ProviderId, StorageKey } from './constants';
 import { decryptString, encryptString } from './crypto';
-import { DEFAULT_SYSTEM_PROMPT, type Settings } from './types';
+import { DEFAULT_SYSTEM_PROMPT, type Settings, type DatabaseConfig } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   defaultProvider: DEFAULT_PROVIDER,
   defaultModel: 'openrouter/auto',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  frontendStack: 'auto',
+  designSkill: 'auto',
 };
+
+export const DEFAULT_DATABASE_CONFIG: DatabaseConfig = {
+  provider: 'spreadsheet',
+  spreadsheetUrl: '',
+};
+
+export async function getDatabaseConfig(): Promise<DatabaseConfig> {
+  const raw = (await chrome.storage.local.get(StorageKey.DATABASE_CONFIG))[
+    StorageKey.DATABASE_CONFIG
+  ] as Partial<DatabaseConfig> | undefined;
+  return { ...DEFAULT_DATABASE_CONFIG, ...raw };
+}
+
+export async function setDatabaseConfig(patch: Partial<DatabaseConfig>): Promise<DatabaseConfig> {
+  const next = { ...(await getDatabaseConfig()), ...patch };
+  await chrome.storage.local.set({ [StorageKey.DATABASE_CONFIG]: next });
+  return next;
+}
 
 export async function getSettings(): Promise<Settings> {
   const raw = (await chrome.storage.local.get(StorageKey.SETTINGS))[StorageKey.SETTINGS] as

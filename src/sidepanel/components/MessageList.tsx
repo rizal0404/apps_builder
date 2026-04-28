@@ -2,16 +2,31 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { ChatMessage } from '@/shared/types';
 import { extractFiles, type ExtractedFile } from '@/shared/codeBlocks';
 import type { Template } from '@/shared/templates';
+import type { FrontendStackId, DesignSkillId } from '@/shared/constants';
 import { TemplateGallery } from './TemplateGallery';
+import { StackPicker } from './StackPicker';
 
 interface Props {
   messages: ChatMessage[];
   streamingId: string | null;
   onReview: (files: ExtractedFile[], messageId: string) => void;
   onUseTemplate: (t: Template) => void;
+  frontendStack: FrontendStackId;
+  designSkill: DesignSkillId;
+  onFrontendStackChange: (id: FrontendStackId) => void;
+  onDesignSkillChange: (id: DesignSkillId) => void;
 }
 
-export function MessageList({ messages, streamingId, onReview, onUseTemplate }: Props) {
+export function MessageList({
+  messages,
+  streamingId,
+  onReview,
+  onUseTemplate,
+  frontendStack,
+  designSkill,
+  onFrontendStackChange,
+  onDesignSkillChange,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = containerRef.current;
@@ -43,6 +58,12 @@ export function MessageList({ messages, streamingId, onReview, onUseTemplate }: 
           <code>js Code.gs</code>), a Review button appears so you can apply them directly to your
           project.
         </p>
+        <StackPicker
+          frontendStack={frontendStack}
+          designSkill={designSkill}
+          onFrontendStackChange={onFrontendStackChange}
+          onDesignSkillChange={onDesignSkillChange}
+        />
         <div className="mt-5 w-full max-w-md text-left">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Starter templates

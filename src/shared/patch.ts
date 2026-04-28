@@ -14,6 +14,7 @@ import { type AppsScriptFile, getProjectContent, updateProjectContent } from './
 import type { DiffResult } from './diff';
 import { diffStrings } from './diff';
 import type { ExtractedFile } from './codeBlocks';
+import { smartMerge } from './smartMerge';
 
 export type PatchOp = 'create' | 'update' | 'unchanged';
 
@@ -50,7 +51,9 @@ export async function buildPatch(
     touched.add(key(p));
     const existing = currentByKey.get(key(p));
     const before = existing?.source ?? '';
-    const after = p.source;
+    // Smart merge: resolve any truncation markers in the AI output
+    // by filling them in with the corresponding original code.
+    const after = existing ? smartMerge(before, p.source) : p.source;
     const op: PatchOp = !existing ? 'create' : before === after ? 'unchanged' : 'update';
     files.push({
       name: p.name,

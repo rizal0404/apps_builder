@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   APP_NAME,
   APP_TAGLINE,
   DEFAULT_MODELS,
   DEFAULT_PROVIDER,
   ProviderId,
+  type FrontendStackId,
+  type DesignSkillId,
 } from '@/shared/constants';
 import { getActiveScriptId, UNKNOWN_SCRIPT_ID } from '@/shared/scriptId';
-import { hasApiKey, getSettings } from '@/shared/storage';
+import { hasApiKey, getSettings, setSettings as persistSettings } from '@/shared/storage';
 import { listConversationsForScript, saveConversation, deleteConversation } from '@/shared/db';
 import { generateId } from '@/shared/id';
 import type { Conversation, Settings } from '@/shared/types';
@@ -16,11 +18,12 @@ import { useChatSession } from './useChatSession';
 import { usePlannerSession } from './usePlannerSession';
 import { Composer } from './components/Composer';
 import { MessageList } from './components/MessageList';
-import { Header } from './components/Header';
+import { Header, type SidePanelTab } from './components/Header';
 import { ConversationsDrawer } from './components/ConversationsDrawer';
 import { ReviewPanel } from './components/ReviewPanel';
 import { PlannerPanel } from './components/PlannerPanel';
 import { DeployPanel } from './components/DeployPanel';
+import { DatabasePanel } from './components/DatabasePanel';
 import type { ExtractedFile } from '@/shared/codeBlocks';
 import type { Template } from '@/shared/templates';
 
@@ -37,6 +40,13 @@ export function SidePanelApp() {
   const [composerSeed, setComposerSeed] = useState<{ value: string; nonce: number } | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<SidePanelTab>('chat');
+
+  // Refs so event-listener closures always read the latest busy state
+  const sessionPendingRef = useRef(false);
+  const plannerRunningRef = useRef(false);
+  /** When a tab switch arrives mid-stream we stash the target scriptId here. */
+  const deferredScriptIdRef = useRef<string | null>(null);
 
   const refreshSettings = useCallback(async () => {
     const next = await getSettings();
@@ -87,14 +97,24 @@ export function SidePanelApp() {
   }, []);
 
   // Listen to chrome.tabs URL changes so the script id auto-refreshes.
+  // If a chat or planner session is in progress we defer the switch until it finishes.
   useEffect(() => {
+    const switchToScript = (sid: string) => {
+      setScriptId(sid);
+      void refreshConversations(sid).then((list) => {
+        if (list.length) setActiveConv(list[0]);
+        else setActiveConv(null);
+      });
+    };
+
     const onActivated = () => {
       void getActiveScriptId().then((sid) => {
-        setScriptId(sid);
-        void refreshConversations(sid).then((list) => {
-          if (list.length) setActiveConv(list[0]);
-          else setActiveConv(null);
-        });
+        if (sessionPendingRef.current || plannerRunningRef.current) {
+          // Busy — remember the desired script and apply it later
+          deferredScriptIdRef.current = sid;
+          return;
+        }
+        switchToScript(sid);
       });
     };
     chrome.tabs?.onActivated.addListener(onActivated);
@@ -115,6 +135,8 @@ export function SidePanelApp() {
   const session = useChatSession({
     conversation: activeConv,
     systemPrompt: settings?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+    frontendStack: settings?.frontendStack,
+    designSkill: settings?.designSkill,
     onConversationSaved: (c) => {
       setConversations((prev) => {
         const without = prev.filter((p) => p.id !== c.id);
@@ -122,6 +144,7 @@ export function SidePanelApp() {
       });
     },
   });
+  sessionPendingRef.current = session.pending;
 
   // Phase 4: Planner session
   const planner = usePlannerSession({
@@ -131,6 +154,20 @@ export function SidePanelApp() {
     systemPrompt: settings?.systemPrompt,
     messages: session.messages,
   });
+  plannerRunningRef.current = planner.status === 'running';
+
+  // Apply deferred tab switch once streaming / planner finishes
+  useEffect(() => {
+    if (session.pending || planner.status === 'running') return;
+    const deferred = deferredScriptIdRef.current;
+    if (!deferred) return;
+    deferredScriptIdRef.current = null;
+    setScriptId(deferred);
+    void refreshConversations(deferred).then((list) => {
+      if (list.length) setActiveConv(list[0]);
+      else setActiveConv(null);
+    });
+  }, [session.pending, planner.status, refreshConversations]);
 
   const newChat = useCallback(async () => {
     if (!settings) return;
@@ -214,6 +251,8 @@ export function SidePanelApp() {
         appName={APP_NAME}
         tagline={APP_TAGLINE}
         scriptId={scriptId}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onNewChat={newChat}
         onOpenOptions={openOptions}
         onToggleDrawer={() => setDrawerOpen((o) => !o)}
@@ -230,6 +269,9 @@ export function SidePanelApp() {
         />
       ) : null}
 
+      {activeTab === 'database' ? (
+        <DatabasePanel />
+      ) : (
       <main className="flex flex-1 flex-col overflow-hidden">
         {!providerHasKey ? (
           <div className="m-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
@@ -251,6 +293,20 @@ export function SidePanelApp() {
             if (t.bootstrap?.length) {
               setReviewing({ files: t.bootstrap, messageId: `template:${t.id}` });
             }
+          }}
+          frontendStack={settings?.frontendStack ?? 'auto'}
+          designSkill={settings?.designSkill ?? 'auto'}
+          onFrontendStackChange={(id: FrontendStackId) => {
+            if (!settings) return;
+            const next = { ...settings, frontendStack: id };
+            setSettings(next);
+            void persistSettings({ frontendStack: id });
+          }}
+          onDesignSkillChange={(id: DesignSkillId) => {
+            if (!settings) return;
+            const next = { ...settings, designSkill: id };
+            setSettings(next);
+            void persistSettings({ designSkill: id });
           }}
         />
 
@@ -274,8 +330,11 @@ export function SidePanelApp() {
           seedText={composerSeed}
           plannerRunning={planner.status === 'running'}
           onCancelPlan={planner.cancel}
+          frontendStack={settings?.frontendStack}
+          designSkill={settings?.designSkill}
         />
       </main>
+      )}
 
       {reviewing ? (
         <ReviewPanel

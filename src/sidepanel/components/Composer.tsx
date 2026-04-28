@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { DEFAULT_MODELS, ProviderId } from '@/shared/constants';
+import type { FrontendStackId, DesignSkillId } from '@/shared/constants';
 import { enhancePromptViaBackground } from '../api';
 
 export type ComposerMode = 'chat' | 'autonomous';
@@ -19,6 +20,10 @@ interface Props {
   seedText?: { value: string; nonce: number } | null;
   plannerRunning?: boolean;
   onCancelPlan?: () => void;
+  /** Current frontend stack selection for context-aware prompt enhancement. */
+  frontendStack?: FrontendStackId;
+  /** Current design skill selection for context-aware prompt enhancement. */
+  designSkill?: DesignSkillId;
 }
 
 const PROVIDERS: ProviderId[] = [ProviderId.OPENROUTER, ProviderId.GEMINI];
@@ -37,6 +42,8 @@ export function Composer({
   seedText,
   plannerRunning,
   onCancelPlan,
+  frontendStack,
+  designSkill,
 }: Props) {
   const [text, setText] = useState('');
   const [enhancing, setEnhancing] = useState(false);
@@ -73,7 +80,7 @@ export function Composer({
     setEnhanceError(null);
     setEnhancing(true);
     try {
-      const next = await enhancePromptViaBackground(providerId, model, v);
+      const next = await enhancePromptViaBackground(providerId, model, v, frontendStack, designSkill);
       if (next) setText(next);
     } catch (err) {
       setEnhanceError(err instanceof Error ? err.message : String(err));

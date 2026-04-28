@@ -16,7 +16,7 @@ type Status =
   | { kind: 'ready'; patch: ProjectPatch }
   | { kind: 'applying'; patch: ProjectPatch }
   | { kind: 'applied' }
-  | { kind: 'error'; message: string; code?: string };
+  | { kind: 'error'; phase: 'build' | 'apply'; message: string; code?: string };
 
 function badge(op: FilePatch['op']): { text: string; className: string } {
   switch (op) {
@@ -41,7 +41,8 @@ export function ReviewPanel({ scriptId, files, onClose }: Props) {
         if (alive) setStatus({ kind: 'ready', patch });
       })
       .catch((err: Error & { code?: string }) => {
-        if (alive) setStatus({ kind: 'error', message: err.message, code: err.code });
+        if (alive)
+          setStatus({ kind: 'error', phase: 'build', message: err.message, code: err.code });
       });
     return () => {
       alive = false;
@@ -62,7 +63,7 @@ export function ReviewPanel({ scriptId, files, onClose }: Props) {
       setStatus({ kind: 'applied' });
     } catch (err) {
       const e = err as Error & { code?: string };
-      setStatus({ kind: 'error', message: e.message, code: e.code });
+      setStatus({ kind: 'error', phase: 'apply', message: e.message, code: e.code });
     }
   }
 
@@ -91,7 +92,9 @@ export function ReviewPanel({ scriptId, files, onClose }: Props) {
         </div>
       ) : status.kind === 'error' ? (
         <div className="m-3 rounded-md border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800">
-          <div className="font-semibold">Failed to build patch</div>
+          <div className="font-semibold">
+            {status.phase === 'apply' ? 'Failed to apply changes' : 'Failed to build patch'}
+          </div>
           <div className="mt-1">{status.message}</div>
           {status.code === 'apps_script_api_disabled' ? (
             <a

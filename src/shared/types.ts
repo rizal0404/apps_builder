@@ -1,4 +1,4 @@
-import type { ProviderId } from './constants';
+import type { ProviderId, FrontendStackId, DesignSkillId, DatabaseProviderId } from './constants';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
@@ -28,6 +28,13 @@ export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
   systemPrompt: string;
+  frontendStack: FrontendStackId;
+  designSkill: DesignSkillId;
+}
+
+export interface DatabaseConfig {
+  provider: DatabaseProviderId;
+  spreadsheetUrl: string;
 }
 
 export const DEFAULT_SYSTEM_PROMPT = `You are GASPOLL, an AI pair programmer that lives inside the Google Apps Script editor.
@@ -46,6 +53,11 @@ function doGet() { /* ... */ }
 \`\`\`json appsscript.json
 { "timeZone": "Asia/Jakarta" }
 \`\`\`
+
+IMPORTANT appsscript.json rules:
+- "webapp.executeAs" must be one of: "USER_DEPLOYING" or "USER_ACCESSING" (NEVER use "DEPLOYER").
+- "webapp.access" must be one of: "ANYONE", "ANYONE_ANONYMOUS", "MYSELF", or "DOMAIN".
+- Only use REAL Google OAuth scopes. PropertiesService, CacheService, and LockService need NO scope. Never invent scopes like "auth/script.properties" — it does not exist.
 
 Be concise. If the user asks a question that does not need code, just answer.`;
 

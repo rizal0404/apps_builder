@@ -170,8 +170,19 @@ export function usePlannerSession(opts: PlannerSessionOptions) {
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
-  // Open planner port
+  // Cleanup on unmount
   useEffect(() => {
+    return () => {
+      portRef.current?.disconnect();
+      portRef.current = null;
+    };
+  }, []);
+
+  /** Opens a fresh planner port, wires up event listeners, and returns it. */
+  const openPort = useCallback((): chrome.runtime.Port => {
+    // Disconnect any stale port
+    portRef.current?.disconnect();
+
     const port = chrome.runtime.connect({ name: PortName.PLANNER });
     portRef.current = port;
 
@@ -196,24 +207,31 @@ export function usePlannerSession(opts: PlannerSessionOptions) {
           break;
         case 'done':
           dispatch({ type: 'done', summary: raw.summary });
+          // Disconnect port when done — no need to keep it alive
+          port.disconnect();
+          portRef.current = null;
           break;
         case 'error':
           dispatch({ type: 'error', error: raw.error });
+          port.disconnect();
+          portRef.current = null;
           break;
       }
     });
 
-    return () => {
-      port.disconnect();
+    port.onDisconnect.addListener(() => {
       portRef.current = null;
-    };
+    });
+
+    return port;
   }, []);
 
   const startPlan = useCallback(
     (goal: string) => {
       dispatch({ type: 'start' });
       const o = optsRef.current;
-      portRef.current?.postMessage({
+      const port = openPort();
+      port.postMessage({
         conversationId: '',
         scriptId: o.scriptId,
         providerId: o.providerId,
@@ -225,7 +243,7 @@ export function usePlannerSession(opts: PlannerSessionOptions) {
         maxTokens: 100_000,
       });
     },
-    [],
+    [openPort],
   );
 
   const cancel = useCallback(() => {
@@ -233,6 +251,8 @@ export function usePlannerSession(opts: PlannerSessionOptions) {
   }, []);
 
   const reset = useCallback(() => {
+    portRef.current?.disconnect();
+    portRef.current = null;
     dispatch({ type: 'reset' });
   }, []);
 

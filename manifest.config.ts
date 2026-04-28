@@ -1,5 +1,32 @@
 import { defineManifest } from '@crxjs/vite-plugin';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pkg from './package.json' with { type: 'json' };
+
+/**
+ * Load .env at config time — Vite's built-in .env loading happens after
+ * the config (and therefore this manifest module) has already been evaluated.
+ */
+function loadEnvFile(): void {
+  if (process.env.GASPOLL_OAUTH_CLIENT_ID) return; // already set (e.g. CI)
+  try {
+    const dir = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url));
+    const raw = readFileSync(resolve(dir, '.env'), 'utf-8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq < 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const val = trimmed.slice(eq + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  } catch {
+    // .env not found — fall back to placeholder
+  }
+}
+loadEnvFile();
 
 /**
  * The OAuth client id used by `chrome.identity.getAuthToken` for Apps Script REST calls.

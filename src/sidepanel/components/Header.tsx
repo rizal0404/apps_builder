@@ -1,19 +1,31 @@
 import { UNKNOWN_SCRIPT_ID } from '@/shared/scriptId';
 
+export type SidePanelTab = 'chat' | 'database' | 'integration';
+
 interface HeaderProps {
   appName: string;
   tagline: string;
   scriptId: string;
+  activeTab: SidePanelTab;
+  onTabChange: (tab: SidePanelTab) => void;
   onNewChat: () => void;
   onOpenOptions: () => void;
   onToggleDrawer: () => void;
   onDeploy?: () => void;
 }
 
+const TABS: { id: SidePanelTab; label: string; disabled?: boolean }[] = [
+  { id: 'chat', label: 'AI Chat' },
+  { id: 'database', label: 'Database' },
+  { id: 'integration', label: 'Integration', disabled: true },
+];
+
 export function Header({
   appName,
   tagline,
   scriptId,
+  activeTab,
+  onTabChange,
   onNewChat,
   onOpenOptions,
   onToggleDrawer,
@@ -21,8 +33,9 @@ export function Header({
 }: HeaderProps) {
   const onScriptPage = scriptId !== UNKNOWN_SCRIPT_ID;
   return (
-    <header className="border-b border-slate-200 px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
+    <header className="border-b border-slate-200">
+      {/* Top row: hamburger, brand, actions */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
         <button
           type="button"
           aria-label="Show conversations"
@@ -107,23 +120,48 @@ export function Header({
         </div>
       </div>
 
-      <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-slate-500">
-        <span
-          className={
-            'h-1.5 w-1.5 rounded-full ' + (onScriptPage ? 'bg-emerald-500' : 'bg-slate-300')
-          }
-        />
-        {onScriptPage ? (
-          <>
-            <span>Apps Script project:</span>
-            <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">
-              {scriptId.slice(0, 8)}…
-            </code>
-          </>
-        ) : (
-          <span>Open a project on script.google.com to bind this chat</span>
-        )}
+      {/* Tab bar */}
+      <div className="flex border-t border-slate-100">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => !tab.disabled && onTabChange(tab.id)}
+            disabled={tab.disabled}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'border-b-2 border-gaspoll-600 text-gaspoll-600'
+                : tab.disabled
+                  ? 'cursor-not-allowed text-slate-300'
+                  : 'text-slate-500 hover:text-slate-700'
+            }`}
+            id={`tab-${tab.id}`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      {/* Script ID indicator — only show on chat tab */}
+      {activeTab === 'chat' && (
+        <div className="flex items-center justify-center gap-1 py-1.5 text-[10px] text-slate-500">
+          <span
+            className={
+              'h-1.5 w-1.5 rounded-full ' + (onScriptPage ? 'bg-emerald-500' : 'bg-slate-300')
+            }
+          />
+          {onScriptPage ? (
+            <>
+              <span>Apps Script project:</span>
+              <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">
+                {scriptId.slice(0, 8)}…
+              </code>
+            </>
+          ) : (
+            <span>Open a project on script.google.com to bind this chat</span>
+          )}
+        </div>
+      )}
     </header>
   );
 }

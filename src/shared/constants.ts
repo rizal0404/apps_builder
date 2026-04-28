@@ -39,6 +39,7 @@ export const enum StorageKey {
   ENCRYPTED_KEYS = 'gaspoll.keys.v1',
   ENCRYPTION_KEY_HANDLE = 'gaspoll.crypto.v1',
   LICENSE = 'gaspoll.license.v1',
+  DATABASE_CONFIG = 'gaspoll.database.v1',
 }
 
 /** IndexedDB name + stores. */
@@ -74,3 +75,38 @@ export const DEFAULT_MODELS: Record<ProviderId, string[]> = {
   ],
   [ProviderId.GEMINI]: ['gemini-2.5-flash', 'gemini-2.5-pro'],
 };
+
+/** Frontend stack options for the AI to use when generating code. */
+export const FRONTEND_STACKS = [
+  { id: 'auto', label: 'Let AI choose the stack' },
+  { id: 'alpine-tailwind', label: 'Alpine.js + Tailwind CSS' },
+  { id: 'vue-tailwind', label: 'Vue.js + Tailwind CSS' },
+  { id: 'alpine-daisyui', label: 'Alpine.js + DaisyUI' },
+  { id: 'jquery-bootstrap', label: 'jQuery + Bootstrap' },
+  { id: 'vanilla-picocss', label: 'Vanilla JS + PicoCSS' },
+  { id: 'custom', label: 'Custom…' },
+] as const;
+
+export type FrontendStackId = (typeof FRONTEND_STACKS)[number]['id'];
+
+/** Design skill / style presets. */
+export const DESIGN_SKILLS = [
+  { id: 'auto', label: 'Let AI decide' },
+  { id: 'agentic', label: 'Agentic UI' },
+  { id: 'bento', label: 'Bento UI' },
+  { id: 'clean', label: 'Clean UI' },
+  { id: 'modern', label: 'Modern UI' },
+  { id: 'glassmorphism', label: 'Glassmorphism' },
+  { id: 'neumorphism', label: 'Neumorphism' },
+  { id: 'minimalist', label: 'Minimalist' },
+] as const;
+
+export type DesignSkillId = (typeof DESIGN_SKILLS)[number]['id'];
+
+/** Database provider options. */
+export const DATABASE_PROVIDERS = [
+  { id: 'spreadsheet', label: 'Spreadsheet' },
+  { id: 'baserow', label: 'Baserow' },
+] as const;
+
+export type DatabaseProviderId = (typeof DATABASE_PROVIDERS)[number]['id'];

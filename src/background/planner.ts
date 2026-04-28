@@ -39,7 +39,11 @@ Important:
 - Use Apps Script idioms (SpreadsheetApp, DriveApp, GmailApp, HtmlService, etc.).
 - Include proper error handling in the generated code.
 - The appsscript.json file type is "JSON" and must include required oauthScopes.
-- For web apps, always include doGet() in a SERVER_JS file.`;
+- For web apps, always include doGet() in a SERVER_JS file.
+- CRITICAL: In appsscript.json, the only valid values for "webapp.executeAs" are: "USER_DEPLOYING" or "USER_ACCESSING". Do NOT use "DEPLOYER" — it is invalid and will cause API errors.
+- The only valid values for "webapp.access" are: "ANYONE", "ANYONE_ANONYMOUS", "MYSELF", or "DOMAIN".
+- CRITICAL: Only use REAL Google OAuth scopes in oauthScopes. PropertiesService, CacheService, LockService, and Utilities do NOT need any scope. Do NOT invent scopes like "https://www.googleapis.com/auth/script.properties" — it does not exist and will cause a 400 error. Common valid scopes: auth/spreadsheets, auth/drive, auth/gmail.send, auth/gmail.readonly, auth/calendar, auth/documents, auth/forms, auth/script.external_request.
+- For Advanced Services in dependencies.enabledAdvancedServices, use the correct serviceId: "sheets" (NOT "sheetsapi"), "drive" (NOT "driveapi"), "calendar", "docs", "slides", "gmail", "youtube", "bigquery", "analytics".`;
 
 export type PlannerEventCallback = (event: PlannerEvent) => void;
 
