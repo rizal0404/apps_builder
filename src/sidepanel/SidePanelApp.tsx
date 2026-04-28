@@ -13,11 +13,14 @@ import { generateId } from '@/shared/id';
 import type { Conversation, Settings } from '@/shared/types';
 import { DEFAULT_SYSTEM_PROMPT } from '@/shared/types';
 import { useChatSession } from './useChatSession';
+import { usePlannerSession } from './usePlannerSession';
 import { Composer } from './components/Composer';
 import { MessageList } from './components/MessageList';
 import { Header } from './components/Header';
 import { ConversationsDrawer } from './components/ConversationsDrawer';
 import { ReviewPanel } from './components/ReviewPanel';
+import { PlannerPanel } from './components/PlannerPanel';
+import { DeployPanel } from './components/DeployPanel';
 import type { ExtractedFile } from '@/shared/codeBlocks';
 import type { Template } from '@/shared/templates';
 
@@ -32,6 +35,8 @@ export function SidePanelApp() {
     null,
   );
   const [composerSeed, setComposerSeed] = useState<{ value: string; nonce: number } | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [deployOpen, setDeployOpen] = useState(false);
 
   const refreshSettings = useCallback(async () => {
     const next = await getSettings();
@@ -118,6 +123,15 @@ export function SidePanelApp() {
     },
   });
 
+  // Phase 4: Planner session
+  const planner = usePlannerSession({
+    scriptId,
+    providerId: activeConv?.providerId ?? DEFAULT_PROVIDER,
+    model: activeConv?.model ?? DEFAULT_MODELS[DEFAULT_PROVIDER][0],
+    systemPrompt: settings?.systemPrompt,
+    messages: session.messages,
+  });
+
   const newChat = useCallback(async () => {
     if (!settings) return;
     const c: Conversation = {
@@ -181,9 +195,17 @@ export function SidePanelApp() {
     chrome.runtime.openOptionsPage?.();
   }, []);
 
+  const handleStartPlan = useCallback(
+    (goal: string) => {
+      planner.startPlan(goal);
+      setPlannerOpen(true);
+    },
+    [planner],
+  );
+
   const composerDisabled = useMemo(
-    () => !activeConv || !providerHasKey || session.pending,
-    [activeConv, providerHasKey, session.pending],
+    () => !activeConv || !providerHasKey || session.pending || planner.status === 'running',
+    [activeConv, providerHasKey, session.pending, planner.status],
   );
 
   return (
@@ -195,6 +217,7 @@ export function SidePanelApp() {
         onNewChat={newChat}
         onOpenOptions={openOptions}
         onToggleDrawer={() => setDrawerOpen((o) => !o)}
+        onDeploy={() => setDeployOpen(true)}
       />
 
       {drawerOpen ? (
@@ -244,10 +267,13 @@ export function SidePanelApp() {
           onProviderChange={setProvider}
           onSend={session.sendUserMessage}
           onCancel={session.cancel}
+          onStartPlan={handleStartPlan}
           pending={session.pending}
           disabled={composerDisabled}
           providerKeyMissing={!providerHasKey}
           seedText={composerSeed}
+          plannerRunning={planner.status === 'running'}
+          onCancelPlan={planner.cancel}
         />
       </main>
 
@@ -258,6 +284,24 @@ export function SidePanelApp() {
           onClose={() => setReviewing(null)}
         />
       ) : null}
+
+      {plannerOpen ? (
+        <PlannerPanel
+          status={planner.status}
+          steps={planner.steps}
+          progressText={planner.progressText}
+          error={planner.error}
+          summary={planner.summary}
+          onCancel={planner.cancel}
+          onReset={() => {
+            planner.reset();
+            setPlannerOpen(false);
+          }}
+          onClose={() => setPlannerOpen(false)}
+        />
+      ) : null}
+
+      {deployOpen ? <DeployPanel scriptId={scriptId} onClose={() => setDeployOpen(false)} /> : null}
     </div>
   );
 }

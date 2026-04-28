@@ -15,15 +15,15 @@ This repository hosts the extension only. Landing page, license server, and memb
 
 This is a **closed-source commercial project** (LTD model — see [PLAN.md](./PLAN.md) §10).
 
-Current phase: **Phase 3 — Gemini provider + prompt enhancer + template gallery**.
+Current phase: **Phase 4 — Autonomous mode + publish web app**.
 
 | Phase | Scope                                                                                                                                      | Status      |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
 | 0     | Repo, build pipeline, manifest MV3, side-panel skeleton, CI                                                                                | shipped     |
 | 1     | Chat MVP with OpenRouter; encrypted API key storage; chat history per scriptId                                                             | shipped     |
 | 2     | Apps Script REST API integration (`projects.getContent` / `updateContent`); Review mode + diff/Apply UI; Monaco MAIN-world bridge fallback | shipped     |
-| 3     | Gemini provider; prompt enhancer; starter template gallery                                                                                 | in progress |
-| 4     | Autonomous mode (tool-calling planner) + publish web app                                                                                   | planned     |
+| 3     | Gemini provider; prompt enhancer; starter template gallery                                                                                 | shipped     |
+| 4     | Autonomous mode (tool-calling planner) + publish web app                                                                                   | in progress |
 | 5     | Polish: live preview, license validator, telemetry, web-store submission                                                                   | planned     |
 
 See [`system_map.md`](./system_map.md) for the live map of files and modules.
@@ -115,6 +115,46 @@ files you can apply directly via Review mode). Current templates:
 The full registry lives in [`src/shared/templates.ts`](./src/shared/templates.ts) — add
 new ones there.
 
+## Autonomous mode (Phase 4)
+
+The Composer has a **💬 Chat / 🤖 Autonomous** mode toggle. In Autonomous mode:
+
+1. The user describes a goal (e.g. "Create a web app with a dashboard").
+2. GASPOLL sends the goal to the AI with tool definitions (`read_file`, `write_file`,
+   `run_function`, `deploy_web_app`).
+3. The AI agent loop executes tool calls against the Apps Script REST API, reading
+   existing files, writing new ones, and optionally deploying.
+4. The `PlannerPanel` shows a step-by-step log of all tool calls and AI reasoning.
+5. The loop ends when the AI is satisfied or hits the iteration cap (10).
+
+The planner runs entirely in the background service worker via `PortName.PLANNER`.
+
+### Tool calling requirements
+
+- **OpenRouter**: Models that support function calling (e.g. `openai/gpt-4o-mini`,
+  `anthropic/claude-3.5-sonnet`) work best.
+- **Gemini**: `gemini-2.5-flash` and `gemini-2.5-pro` both support function calling.
+
+## Deploy web app (Phase 4)
+
+The Header has a **🚀 Deploy** button (visible when a valid scriptId is detected).
+Clicking it opens the `DeployPanel` which:
+
+1. Creates an immutable **version** of the project via `projects.versions.create`.
+2. Creates a **deployment** from that version via `projects.deployments.create`.
+3. Displays the resulting **Web App URL** with a copy button.
+
+The script must have a `doGet()` or `doPost()` function for a web app URL to be
+generated. The `appsscript.json` must include `webapp` configuration.
+
+### `scripts.run` requirements
+
+The `run_function` tool uses the `scripts.run` REST API. For this to work:
+
+1. The script must be deployed as an **API Executable** (not a web app).
+2. The script's Cloud project must match the extension's OAuth client.
+3. The user must have Editor access to the script.
+
 ## Review mode (Phase 2)
 
 When the assistant replies with fenced code blocks tagged with file names — e.g.:
@@ -152,28 +192,33 @@ badges per file. Hit **Apply to project** to push the merged set through `update
 ├── src/
 │   ├── assets/               # extension icons (16/32/48/128)
 │   ├── background/
-│   │   └── service-worker.ts # message router + chat streaming port
+│   │   ├── service-worker.ts # message router + chat streaming port + planner port
+│   │   └── planner.ts       # Phase 4: autonomous agent loop
 │   ├── content/
 │   │   ├── inject.ts         # content script (ISOLATED world) — RPC bridge
 │   │   └── monaco-bridge.ts  # content script (MAIN world) — reaches window.monaco
 │   ├── providers/
-│   │   ├── types.ts          # IProvider interface
+│   │   ├── types.ts          # IProvider interface + tool calling types
 │   │   ├── sse.ts            # Server-Sent Events parser
-│   │   ├── openrouter.ts     # OpenRouter adapter (streaming)
+│   │   ├── openrouter.ts     # OpenRouter adapter (streaming + tool calling)
+│   │   ├── gemini.ts         # Gemini adapter (streaming + tool calling)
 │   │   └── registry.ts       # provider lookup
 │   ├── shared/
-│   │   ├── constants.ts      # MsgType, StorageKey, ProviderId, DEFAULT_MODELS, …
-│   │   ├── types.ts          # ChatMessage / Conversation / Settings
+│   │   ├── constants.ts      # MsgType, PortName, StorageKey, ProviderId, DEFAULT_MODELS, …
+│   │   ├── types.ts          # ChatMessage / Conversation / Settings / PlannerRequest / PlannerEvent
 │   │   ├── id.ts             # 128-bit random ids
 │   │   ├── scriptId.ts       # detect Apps Script id from a tab URL
 │   │   ├── crypto.ts         # AES-GCM encrypt/decrypt for API keys
 │   │   ├── storage.ts        # chrome.storage.local facade
 │   │   ├── db.ts             # IndexedDB wrapper for chat history
 │   │   ├── oauth.ts          # chrome.identity.getAuthToken wrapper
-│   │   ├── appsScriptApi.ts  # projects.getContent / updateContent client
+│   │   ├── appsScriptApi.ts  # projects.getContent / updateContent / createVersion / createDeployment / runFunction
 │   │   ├── codeBlocks.ts     # parse fenced AI output → ExtractedFile[]
 │   │   ├── diff.ts           # tiny LCS line-diff for Review mode
 │   │   ├── patch.ts          # build / apply ProjectPatch
+│   │   ├── tools.ts          # Phase 4: tool definitions + executor
+│   │   ├── promptEnhancer.ts # Phase 3: prompt enhancement
+│   │   ├── templates.ts      # Phase 3: starter template registry
 │   │   └── license.ts        # GSP-XXX-XXX-XXX-{FREE|PLUS|PRO} key validator
 │   ├── sidepanel/            # React side-panel UI (default UI surface)
 │   └── options/              # React options page
