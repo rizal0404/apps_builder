@@ -121,4 +121,3 @@ export async function runFunctionViaBackground(
   });
   return resp.result;
 }
-

@@ -9,6 +9,7 @@ import type {
   ProviderChatResult,
   ProviderChatResultWithTools,
   ProviderToolCall,
+  WireMessage,
 } from './types';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -31,6 +32,37 @@ function buildMessages(systemPrompt: string | undefined, messages: ChatMessage[]
   const out: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
   if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
   for (const m of messages) out.push({ role: m.role, content: m.content });
+  return out;
+}
+
+/**
+ * Build an OpenAI-compatible messages array from the planner's WireMessage
+ * history. Preserves `tool_calls` on assistant messages and emits tool-role
+ * messages with `tool_call_id` in the exact order required by the spec.
+ */
+function buildWireMessages(
+  systemPrompt: string | undefined,
+  messages: WireMessage[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
+  for (const m of messages) {
+    if (m.role === 'tool') {
+      out.push({
+        role: 'tool',
+        tool_call_id: m.tool_call_id,
+        content: m.content,
+      });
+    } else if (m.role === 'assistant' && 'tool_calls' in m) {
+      out.push({
+        role: 'assistant',
+        content: m.content,
+        tool_calls: m.tool_calls,
+      });
+    } else {
+      out.push({ role: m.role, content: m.content });
+    }
+  }
   return out;
 }
 
@@ -87,22 +119,7 @@ export const openRouterProvider: IProvider = {
     req: ProviderChatRequestWithTools,
     onChunk: (c: ProviderChatChunk) => void,
   ): Promise<ProviderChatResultWithTools> {
-    // Build messages including tool results from previous iterations
-    const messages: Array<Record<string, unknown>> = buildMessages(
-      req.systemPrompt,
-      req.messages,
-    );
-
-    // Append tool result messages if present
-    if (req.toolMessages?.length) {
-      for (const tm of req.toolMessages) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: tm.tool_call_id,
-          content: tm.content,
-        });
-      }
-    }
+    const messages = buildWireMessages(req.systemPrompt, req.messages);
 
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -169,11 +186,8 @@ export const openRouterProvider: IProvider = {
       if (choice?.finish_reason) finishReason = choice.finish_reason;
     }
 
-    const toolCalls: ProviderToolCall[] = Array.from(toolCallsMap.values()).filter(
-      (tc) => tc.name,
-    );
+    const toolCalls: ProviderToolCall[] = Array.from(toolCallsMap.values()).filter((tc) => tc.name);
 
     return { text: fullText, finishReason, toolCalls: toolCalls.length ? toolCalls : undefined };
   },
 };
-

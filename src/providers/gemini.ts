@@ -9,6 +9,7 @@ import type {
   ProviderChatResult,
   ProviderChatResultWithTools,
   ProviderToolCall,
+  WireMessage,
 } from './types';
 
 const ENDPOINT_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -36,6 +37,64 @@ function buildContents(messages: ChatMessage[]) {
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
+}
+
+/**
+ * Map our WireMessage history into Gemini's `contents` array, preserving the
+ * interleaving of `functionCall` (model) and `functionResponse` (function)
+ * parts required by the Gemini tool-calling protocol.
+ */
+function buildContentsFromWire(messages: WireMessage[]): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const m of messages) {
+    if (m.role === 'system') continue;
+    if (m.role === 'tool') {
+      // tool result → function response keyed by the original function name
+      let responsePayload: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(m.content) as unknown;
+        responsePayload =
+          parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : { content: m.content };
+      } catch {
+        responsePayload = { content: m.content };
+      }
+      out.push({
+        role: 'function',
+        parts: [
+          {
+            functionResponse: {
+              name: m.name,
+              response: responsePayload,
+            },
+          },
+        ],
+      });
+      continue;
+    }
+    if (m.role === 'assistant' && 'tool_calls' in m && m.tool_calls.length) {
+      const parts: Array<Record<string, unknown>> = [];
+      if (m.content) parts.push({ text: m.content });
+      for (const tc of m.tool_calls) {
+        let args: Record<string, unknown>;
+        try {
+          args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+        } catch {
+          args = {};
+        }
+        parts.push({ functionCall: { name: tc.function.name, args } });
+      }
+      out.push({ role: 'model', parts });
+      continue;
+    }
+    // Plain user/assistant text message
+    out.push({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    });
+  }
+  return out;
 }
 
 export const geminiProvider: IProvider = {
@@ -101,25 +160,10 @@ export const geminiProvider: IProvider = {
   ): Promise<ProviderChatResultWithTools> {
     const url = `${ENDPOINT_BASE}/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
-    // Build contents with tool result messages
-    const contents: Array<Record<string, unknown>> = buildContents(req.messages);
-
-    // Append tool results as Gemini "function" role messages
-    if (req.toolMessages?.length) {
-      for (const tm of req.toolMessages) {
-        contents.push({
-          role: 'function',
-          parts: [
-            {
-              functionResponse: {
-                name: tm.tool_call_id, // Gemini uses the function name here
-                response: { content: tm.content },
-              },
-            },
-          ],
-        });
-      }
-    }
+    // Translate the planner's WireMessage[] (which already interleaves
+    // assistant(tool_calls) and tool(functionResponse) in order) into Gemini's
+    // `contents` array.
+    const contents = buildContentsFromWire(req.messages);
 
     // Convert OpenAI-format tools to Gemini functionDeclarations
     const functionDeclarations = req.tools.map((t) => ({
@@ -188,4 +232,3 @@ export const geminiProvider: IProvider = {
     return { text: fullText, finishReason, toolCalls: toolCalls.length ? toolCalls : undefined };
   },
 };
-

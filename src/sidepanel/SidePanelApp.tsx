@@ -301,10 +301,7 @@ export function SidePanelApp() {
         />
       ) : null}
 
-      {deployOpen ? (
-        <DeployPanel scriptId={scriptId} onClose={() => setDeployOpen(false)} />
-      ) : null}
+      {deployOpen ? <DeployPanel scriptId={scriptId} onClose={() => setDeployOpen(false)} /> : null}
     </div>
   );
 }
-

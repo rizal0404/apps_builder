@@ -210,9 +210,10 @@ async function execRunFunction(
     return { result: `Function error: ${res.error.message}`, isError: true };
   }
   return {
-    result: res.response?.result !== undefined
-      ? JSON.stringify(res.response.result, null, 2)
-      : 'Function executed successfully (no return value).',
+    result:
+      res.response?.result !== undefined
+        ? JSON.stringify(res.response.result, null, 2)
+        : 'Function executed successfully (no return value).',
     isError: false,
   };
 }

@@ -82,43 +82,43 @@ the `MsgType` enum from `src/shared/constants.ts`.
 
 ### Source — shared
 
-| Path                           | Purpose                                                                                                         |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `src/shared/constants.ts`      | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS`       |
+| Path                           | Purpose                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `src/shared/constants.ts`      | App constants, `MsgType`, `PortName`, `StorageKey`, IDB names, license + provider enums, `DEFAULT_MODELS`        |
 | `src/shared/types.ts`          | `ChatMessage`, `Conversation`, `Settings`, `ChatRequest`, `PlannerRequest`, `PlannerEvent`, `ToolCallInfo`, etc. |
-| `src/shared/id.ts`             | `generateId(prefix?)` — 128-bit random hex id                                                                   |
-| `src/shared/scriptId.ts`       | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                      |
-| `src/shared/crypto.ts`         | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                          |
-| `src/shared/storage.ts`        | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                                    |
-| `src/shared/db.ts`             | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                              |
-| `src/shared/oauth.ts`          | `chrome.identity.getAuthToken` wrapper + cache busting on 401                                                   |
-| `src/shared/appsScriptApi.ts`  | REST client: `getProjectContent`, `updateProjectContent`, `createVersion`, `createDeployment`, `runFunction`    |
-| `src/shared/codeBlocks.ts`     | Parses fenced AI code blocks (`js Code.gs`, `html Index.html`, `json appsscript.json`) into `ExtractedFile[]`   |
-| `src/shared/diff.ts`           | LCS-based line diff used by the Review panel                                                                    |
-| `src/shared/patch.ts`          | `buildPatch(scriptId, proposed)` + `applyPatch(patch)`                                                          |
-| `src/shared/promptEnhancer.ts` | `enhancePrompt({ providerId, model, text })` — single-shot rewrite via the configured chat provider             |
-| `src/shared/templates.ts`      | Curated `Template[]` registry with starter prompts and optional `bootstrap` files                               |
-| `src/shared/license.ts`        | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                          |
-| `src/shared/tools.ts`          | **Phase 4.** Tool definitions (`read_file`, `write_file`, `run_function`, `deploy_web_app`) + `executeTool()`   |
+| `src/shared/id.ts`             | `generateId(prefix?)` — 128-bit random hex id                                                                    |
+| `src/shared/scriptId.ts`       | Parses Apps Script id from `script.google.com` URLs; `getActiveScriptId()`                                       |
+| `src/shared/crypto.ts`         | AES-GCM `encryptString` / `decryptString` with key persisted in `chrome.storage.local`                           |
+| `src/shared/storage.ts`        | Settings & encrypted-key facade (`getSettings`, `setApiKey`, `getApiKey`, …)                                     |
+| `src/shared/db.ts`             | `idb`-backed `gaspoll` DB with `conversations` + `messages` stores                                               |
+| `src/shared/oauth.ts`          | `chrome.identity.getAuthToken` wrapper + cache busting on 401                                                    |
+| `src/shared/appsScriptApi.ts`  | REST client: `getProjectContent`, `updateProjectContent`, `createVersion`, `createDeployment`, `runFunction`     |
+| `src/shared/codeBlocks.ts`     | Parses fenced AI code blocks (`js Code.gs`, `html Index.html`, `json appsscript.json`) into `ExtractedFile[]`    |
+| `src/shared/diff.ts`           | LCS-based line diff used by the Review panel                                                                     |
+| `src/shared/patch.ts`          | `buildPatch(scriptId, proposed)` + `applyPatch(patch)`                                                           |
+| `src/shared/promptEnhancer.ts` | `enhancePrompt({ providerId, model, text })` — single-shot rewrite via the configured chat provider              |
+| `src/shared/templates.ts`      | Curated `Template[]` registry with starter prompts and optional `bootstrap` files                                |
+| `src/shared/license.ts`        | `GSP-XXX-XXX-XXX-{FREE\|PLUS\|PRO}` validator (`parseLicense`, `isValidLicenseFormat`)                           |
+| `src/shared/tools.ts`          | **Phase 4.** Tool definitions (`read_file`, `write_file`, `run_function`, `deploy_web_app`) + `executeTool()`    |
 
 ### Source — providers
 
-| Path                          | Purpose                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
+| Path                          | Purpose                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
 | `src/providers/types.ts`      | `IProvider` interface + request/result shapes + `ProviderToolCall`, `*WithTools` types |
-| `src/providers/sse.ts`        | Minimal Server-Sent Events parser (async generator)                                   |
+| `src/providers/sse.ts`        | Minimal Server-Sent Events parser (async generator)                                    |
 | `src/providers/openrouter.ts` | OpenRouter chat completions adapter with streaming + tool calling (Phase 4)            |
 | `src/providers/gemini.ts`     | Google Generative Language API adapter with streaming + tool calling (Phase 4)         |
-| `src/providers/registry.ts`   | `getProvider(id)` lookup; throws when a provider is not yet wired                     |
+| `src/providers/registry.ts`   | `getProvider(id)` lookup; throws when a provider is not yet wired                      |
 
 ### Source — background / content
 
-| Path                               | Purpose                                                                                                                                                                                                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Path                               | Purpose                                                                                                                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/background/service-worker.ts` | Routes `PING`, `GET_PROJECT_CONTENT`, `BUILD_PATCH`, `APPLY_PATCH`, `UPDATE_PROJECT_CONTENT`, `ENHANCE_PROMPT`, `CREATE_VERSION`, `CREATE_DEPLOYMENT`, `RUN_FUNCTION`; owns `PortName.CHAT` streaming session and `PortName.PLANNER` agent session (Phase 4) |
-| `src/background/planner.ts`        | **Phase 4.** Autonomous agent loop: sends messages with tool definitions, executes tool calls, loops until done or iteration cap                                                                                                                            |
-| `src/content/inject.ts`            | ISOLATED-world content script; PING + RPC bridge to the MAIN-world Monaco helper                                                                                                                                                                            |
-| `src/content/monaco-bridge.ts`     | MAIN-world Monaco helper (`ping`, `getActiveModelText`, `replaceActiveModelText`) used as a live-typing fallback                                                                                                                                            |
+| `src/background/planner.ts`        | **Phase 4.** Autonomous agent loop: sends messages with tool definitions, executes tool calls, loops until done or iteration cap                                                                                                                             |
+| `src/content/inject.ts`            | ISOLATED-world content script; PING + RPC bridge to the MAIN-world Monaco helper                                                                                                                                                                             |
+| `src/content/monaco-bridge.ts`     | MAIN-world Monaco helper (`ping`, `getActiveModelText`, `replaceActiveModelText`) used as a live-typing fallback                                                                                                                                             |
 
 ### Source — side panel
 
@@ -127,19 +127,19 @@ the `MsgType` enum from `src/shared/constants.ts`.
 | `src/sidepanel/index.html`                         | HTML host                                                                                   |
 | `src/sidepanel/main.tsx`                           | React entry                                                                                 |
 | `src/sidepanel/styles.css`                         | Tailwind entry                                                                              |
-| `src/sidepanel/SidePanelApp.tsx`                   | Root component: conversation lifecycle, scriptId binding, settings sync, planner + deploy    |
-| `src/sidepanel/useChatSession.ts`                  | Hook — opens chat port, dispatches reducer for streaming, persists messages to IDB           |
-| `src/sidepanel/usePlannerSession.ts`               | **Phase 4.** Hook — opens planner port, dispatches reducer for tool calls, streams progress  |
-| `src/sidepanel/api.ts`                             | Promisified `chrome.runtime.sendMessage` helpers for REST/Review/Deploy flows                |
+| `src/sidepanel/SidePanelApp.tsx`                   | Root component: conversation lifecycle, scriptId binding, settings sync, planner + deploy   |
+| `src/sidepanel/useChatSession.ts`                  | Hook — opens chat port, dispatches reducer for streaming, persists messages to IDB          |
+| `src/sidepanel/usePlannerSession.ts`               | **Phase 4.** Hook — opens planner port, dispatches reducer for tool calls, streams progress |
+| `src/sidepanel/api.ts`                             | Promisified `chrome.runtime.sendMessage` helpers for REST/Review/Deploy flows               |
 | `src/sidepanel/components/Header.tsx`              | Top bar (drawer toggle, brand, scriptId pill, new-chat, deploy, settings)                   |
-| `src/sidepanel/components/MessageList.tsx`         | Scrollable transcript with empty state + per-bubble "Review N files" affordance              |
-| `src/sidepanel/components/Composer.tsx`            | Provider/model picker + mode toggle (Chat/Autonomous) + textarea + send/stop/run             |
-| `src/sidepanel/components/ConversationsDrawer.tsx` | Sidebar list of conversations for the current scriptId                                       |
-| `src/sidepanel/components/DiffView.tsx`            | Renders a `DiffResult` as a side-by-side gutter table                                        |
-| `src/sidepanel/components/ReviewPanel.tsx`         | Modal-style overlay: file list → diff → Apply (or Apps Script API hint)                      |
-| `src/sidepanel/components/TemplateGallery.tsx`     | Empty-state cards for the curated starter templates                                          |
-| `src/sidepanel/components/PlannerPanel.tsx`        | **Phase 4.** Overlay showing step-by-step log of autonomous tool calls + AI progress         |
-| `src/sidepanel/components/DeployPanel.tsx`         | **Phase 4.** Overlay for creating versioned deployments + web app URL display                 |
+| `src/sidepanel/components/MessageList.tsx`         | Scrollable transcript with empty state + per-bubble "Review N files" affordance             |
+| `src/sidepanel/components/Composer.tsx`            | Provider/model picker + mode toggle (Chat/Autonomous) + textarea + send/stop/run            |
+| `src/sidepanel/components/ConversationsDrawer.tsx` | Sidebar list of conversations for the current scriptId                                      |
+| `src/sidepanel/components/DiffView.tsx`            | Renders a `DiffResult` as a side-by-side gutter table                                       |
+| `src/sidepanel/components/ReviewPanel.tsx`         | Modal-style overlay: file list → diff → Apply (or Apps Script API hint)                     |
+| `src/sidepanel/components/TemplateGallery.tsx`     | Empty-state cards for the curated starter templates                                         |
+| `src/sidepanel/components/PlannerPanel.tsx`        | **Phase 4.** Overlay showing step-by-step log of autonomous tool calls + AI progress        |
+| `src/sidepanel/components/DeployPanel.tsx`         | **Phase 4.** Overlay for creating versioned deployments + web app URL display               |
 
 ### Source — options
 

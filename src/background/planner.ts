@@ -13,8 +13,8 @@ import { ProviderId } from '@/shared/constants';
 import { getApiKey } from '@/shared/storage';
 import { getProvider } from '@/providers/registry';
 import { toOpenAITools, executeTool } from '@/shared/tools';
-import type { ChatMessage, PlannerRequest, PlannerEvent } from '@/shared/types';
-import { generateId } from '@/shared/id';
+import type { PlannerRequest, PlannerEvent } from '@/shared/types';
+import type { WireMessage } from '@/providers/types';
 
 const DEFAULT_MAX_ITERATIONS = 10;
 const DEFAULT_MAX_TOKENS = 100_000;
@@ -86,26 +86,17 @@ export function createPlannerSession(
         `\nTarget scriptId: ${request.scriptId}`,
       ].join('\n');
 
-      // Start with user's goal as the latest message
-      const messages: ChatMessage[] = [
-        ...request.messages.filter((m) => m.role !== 'system'),
-        {
-          id: generateId('msg'),
-          role: 'user',
-          content: request.goal,
-          createdAt: Date.now(),
-        },
+      // Unified wire-format conversation. We start from the prior chat history
+      // (sans system messages) plus the new user goal, then grow the array in
+      // strict protocol order each iteration: assistant(tool_calls) → tool(…).
+      const wireMessages: WireMessage[] = [
+        ...request.messages
+          .filter((m) => m.role !== 'system')
+          .map<WireMessage>((m) => ({ role: m.role, content: m.content })),
+        { role: 'user', content: request.goal },
       ];
 
       const tools = toOpenAITools();
-      const toolMessages: Array<{ role: 'tool'; tool_call_id: string; content: string }> = [];
-
-      // Track assistant messages with tool_calls for the conversation
-      const assistantToolCallMessages: Array<{
-        role: 'assistant';
-        content: string;
-        tool_calls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
-      }> = [];
 
       let iteration = 0;
 
@@ -118,30 +109,15 @@ export function createPlannerSession(
         iteration++;
         onEvent({ type: 'iteration', iteration, maxIterations: maxIter });
 
-        // Build the full message list for this iteration
-        // We need to rebuild because messages grow with tool results
-        const allMessages: ChatMessage[] = [...messages];
-
-        // Add any assistant tool_call messages and tool results as synthetic messages
-        for (const atcm of assistantToolCallMessages) {
-          allMessages.push({
-            id: generateId('msg'),
-            role: 'assistant',
-            content: atcm.content || `[Tool calls: ${atcm.tool_calls.map((tc) => tc.function.name).join(', ')}]`,
-            createdAt: Date.now(),
-          });
-        }
-
         let progressText = '';
         const result = await provider.streamChatWithTools(
           {
             apiKey,
             model: request.model,
             systemPrompt,
-            messages: allMessages,
+            messages: wireMessages,
             signal: aborter.signal,
             tools,
-            toolMessages: toolMessages.length ? toolMessages : undefined,
           },
           ({ delta }) => {
             progressText += delta;
@@ -151,8 +127,10 @@ export function createPlannerSession(
 
         // Check if the AI wants to call tools
         if (result.toolCalls?.length) {
-          // Record the assistant message with tool_calls
-          assistantToolCallMessages.push({
+          // Append the assistant message with structured tool_calls — this is
+          // the piece OpenAI / Gemini require to accept the following tool
+          // results. Previously the tool_calls structure was dropped.
+          wireMessages.push({
             role: 'assistant',
             content: result.text,
             tool_calls: result.toolCalls.map((tc) => ({
@@ -162,7 +140,8 @@ export function createPlannerSession(
             })),
           });
 
-          // Execute each tool call
+          // Execute each tool call and append its result immediately after the
+          // assistant message, in the same iteration's order.
           for (const tc of result.toolCalls) {
             let args: Record<string, unknown>;
             try {
@@ -188,10 +167,10 @@ export function createPlannerSession(
               },
             });
 
-            // For OpenRouter: append tool results
-            toolMessages.push({
+            wireMessages.push({
               role: 'tool',
               tool_call_id: tc.id,
+              name: tc.name,
               content: toolResult.result,
             });
           }

@@ -8,12 +8,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { PortName, ProviderId } from '@/shared/constants';
-import type {
-  ChatMessage,
-  PlannerEvent,
-  ToolCallInfo,
-  ToolResultInfo,
-} from '@/shared/types';
+import type { ChatMessage, PlannerEvent, ToolCallInfo, ToolResultInfo } from '@/shared/types';
 
 export interface PlannerStep {
   id: number;
@@ -209,24 +204,21 @@ export function usePlannerSession(opts: PlannerSessionOptions) {
     };
   }, []);
 
-  const startPlan = useCallback(
-    (goal: string) => {
-      dispatch({ type: 'start' });
-      const o = optsRef.current;
-      portRef.current?.postMessage({
-        conversationId: '',
-        scriptId: o.scriptId,
-        providerId: o.providerId,
-        model: o.model,
-        goal,
-        messages: o.messages,
-        systemPrompt: o.systemPrompt,
-        maxIterations: 10,
-        maxTokens: 100_000,
-      });
-    },
-    [],
-  );
+  const startPlan = useCallback((goal: string) => {
+    dispatch({ type: 'start' });
+    const o = optsRef.current;
+    portRef.current?.postMessage({
+      conversationId: '',
+      scriptId: o.scriptId,
+      providerId: o.providerId,
+      model: o.model,
+      goal,
+      messages: o.messages,
+      systemPrompt: o.systemPrompt,
+      maxIterations: 10,
+      maxTokens: 100_000,
+    });
+  }, []);
 
   const cancel = useCallback(() => {
     portRef.current?.postMessage({ type: 'cancel' });
