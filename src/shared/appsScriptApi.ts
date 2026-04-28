@@ -174,10 +174,7 @@ export async function updateProjectContent(
  * Create a new immutable version of the script project.
  * https://developers.google.com/apps-script/api/reference/rest/v1/projects.versions/create
  */
-export async function createVersion(
-  scriptId: string,
-  description: string,
-): Promise<ScriptVersion> {
+export async function createVersion(scriptId: string, description: string): Promise<ScriptVersion> {
   const res = await request('POST', `/projects/${encodeURIComponent(scriptId)}/versions`, {
     description,
   });
@@ -241,4 +238,3 @@ export async function runFunction(
   }
   return JSON.parse(text) as RunResult;
 }
-

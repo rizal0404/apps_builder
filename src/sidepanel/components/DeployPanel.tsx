@@ -123,8 +123,8 @@ export function DeployPanel({ scriptId, onClose }: Props) {
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
               <strong>Note:</strong> Make sure your script has a <code>doGet()</code> function and
               the <code>appsscript.json</code> has{' '}
-              <code>{'"webapp": { "access": "ANYONE", "executeAs": "USER_DEPLOYING" }'}</code> for
-              a publicly accessible web app.
+              <code>{'"webapp": { "access": "ANYONE", "executeAs": "USER_DEPLOYING" }'}</code> for a
+              publicly accessible web app.
             </div>
           </div>
         )}

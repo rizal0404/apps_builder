@@ -275,4 +275,3 @@ function handlePlannerPort(port: chrome.runtime.Port) {
     session = null;
   });
 }
-
