@@ -27,16 +27,35 @@ export interface ProviderToolCall {
   arguments: string; // JSON string
 }
 
-export interface ProviderChatRequestWithTools extends ProviderChatRequest {
+/** Structured tool_call carried on an assistant wire message. */
+export interface WireToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+/**
+ * Wire-level message shape sent to tool-calling providers. Unlike `ChatMessage`,
+ * this preserves the OpenAI tool-calling protocol: assistant messages can carry
+ * structured `tool_calls`, and tool-role messages reference a previous
+ * `tool_call_id` plus the function `name` (needed by Gemini's
+ * `functionResponse.name`).
+ */
+export type WireMessage =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'assistant'; content: string; tool_calls: WireToolCall[] }
+  | { role: 'tool'; tool_call_id: string; name: string; content: string };
+
+export interface ProviderChatRequestWithTools extends Omit<ProviderChatRequest, 'messages'> {
+  /**
+   * Full conversation history for the current iteration, including any
+   * prior assistant-with-tool_calls messages and their matching tool results
+   * in the exact order required by the OpenAI / Gemini tool-calling protocols.
+   */
+  messages: WireMessage[];
   tools: Array<{
     type: 'function';
     function: { name: string; description: string; parameters: Record<string, unknown> };
-  }>;
-  /** Tool results from previous iterations (OpenAI format). */
-  toolMessages?: Array<{
-    role: 'tool';
-    tool_call_id: string;
-    content: string;
   }>;
 }
 
@@ -58,4 +77,3 @@ export interface IProvider {
     onChunk: (c: ProviderChatChunk) => void,
   ): Promise<ProviderChatResultWithTools>;
 }
-
